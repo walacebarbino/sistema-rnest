@@ -24,8 +24,10 @@ try:
         sh = client.open("BD_INST")
 
     # Abre a primeira aba do arquivo selecionado
-    ws = sh.get_worksheet(0) 
-    df = pd.DataFrame(ws.get_all_records())
+    ws = sh.get_worksheet(0)
+data = ws.get_all_values()
+# Cria o DataFrame usando a primeira linha como cabeçalho
+df = pd.DataFrame(data[1:], columns=data[0])
 
     if aba == "📊 Quadro Geral":
         st.header(f"Base de Dados: {disc}")
