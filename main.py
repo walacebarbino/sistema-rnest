@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from google.oauth2.service_account import Credentials
 import gspread
-import re
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="SISTEMA RNEST", layout="wide")
@@ -10,24 +9,14 @@ st.set_page_config(page_title="SISTEMA RNEST", layout="wide")
 @st.cache_resource
 def conectar_google():
     try:
-        # Busca os segredos
+        # Pega os dados dos Secrets
         s_info = dict(st.secrets["gcp_service_account"])
         
-        # --- LIMPEZA DA CHAVE (CORREÇÃO PARA O ERRO DE 65 CARACTERES) ---
-        key = s_info["private_key"]
-        
-        # 1. Remove espaços em branco no início e fim
-        key = key.strip()
-        
-        # 2. Se a chave foi colada com \n literais, converte para quebras reais
-        key = key.replace("\\n", "\n")
-        
-        # 3. Remove espaços duplos ou caracteres invisíveis que quebram o Base64
-        # Garante que as linhas da chave não tenham espaços vazios nelas
-        lines = [line.strip() for line in key.split('\n')]
-        key = '\n'.join(lines)
-        
-        s_info["private_key"] = key
+        # --- LIMPEZA AUTOMÁTICA DA CHAVE ---
+        # Remove espaços, converte \n e limpa caracteres invisíveis
+        raw_key = s_info["private_key"].replace("\\n", "\n")
+        lines = [line.strip() for line in raw_key.split('\n') if line.strip()]
+        s_info["private_key"] = '\n'.join(lines)
         
         scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
         creds = Credentials.from_service_account_info(s_info, scopes=scope)
@@ -55,52 +44,44 @@ try:
     nome_plan = "BD_ELE" if disc == "ELÉTRICA" else "BD_INST"
     sh = client.open(nome_plan)
     ws = sh.get_worksheet(0)
-    
     data = ws.get_all_values()
+    
     if len(data) > 0:
         df = pd.DataFrame(data[1:], columns=data[0])
-        cols_map = {col: i + 1 for i, col in enumerate(data[0])}
+        cols = {col: i + 1 for i, col in enumerate(data[0])}
 
         if aba == "📊 Quadro Geral":
             st.dataframe(df, use_container_width=True)
 
         elif aba == "📝 Edição Individual":
-            st.header(f"Lançamento Individual - {disc}")
-            tag_list = sorted([t for t in df['TAG'].unique() if t.strip() != ""])
-            tag_sel = st.selectbox("Selecione o TAG:", tag_list)
-            
+            tag_sel = st.selectbox("TAG:", sorted(df['TAG'].unique()))
             idx = df.index[df['TAG'] == tag_sel][0]
-            row_data = df.iloc[idx]
-
-            with st.form("form_edit"):
+            row = df.iloc[idx]
+            with st.form("edit"):
                 c1, c2, c3, c4 = st.columns(4)
-                d_i = c1.text_input("DATA INIC PROG", value=str(row_data.get('DATA INIC PROG', '')))
-                d_f = c2.text_input("DATA FIM PROG", value=str(row_data.get('DATA FIM PROG', '')))
-                d_p = c3.text_input("PREVISTO", value=str(row_data.get('PREVISTO', '')))
-                d_m = c4.text_input("DATA MONT", value=str(row_data.get('DATA MONT', '')))
-                
+                d_i = c1.text_input("DATA INIC PROG", row.get('DATA INIC PROG', ''))
+                d_f = c2.text_input("DATA FIM PROG", row.get('DATA FIM PROG', ''))
+                d_p = c3.text_input("PREVISTO", row.get('PREVISTO', ''))
+                d_m = c4.text_input("DATA MONT", row.get('DATA MONT', ''))
                 if st.form_submit_button("SALVAR"):
-                    st_novo = calcular_status(d_i, d_m)
-                    for k, v in {'DATA INIC PROG': d_i, 'DATA FIM PROG': d_f, 'PREVISTO': d_p, 'DATA MONT': d_m, 'STATUS': st_novo}.items():
-                        if k in cols_map:
-                            ws.update_cell(idx + 2, cols_map[k], str(v))
-                    st.success("Dados salvos!")
+                    st_at = calcular_status(d_i, d_m)
+                    for k, v in {'DATA INIC PROG': d_i, 'DATA FIM PROG': d_f, 'PREVISTO': d_p, 'DATA MONT': d_m, 'STATUS': st_at}.items():
+                        if k in cols: ws.update_cell(idx + 2, cols[k], str(v))
+                    st.success("Salvo!")
                     st.rerun()
 
         elif aba == "📤 Carga em Massa":
-            st.header("Importação Excel")
-            file = st.file_uploader("Arquivo .xlsx", type="xlsx")
-            if file and st.button("PROCESSAR"):
-                df_up = pd.read_excel(file).astype(str).replace('nan', '')
+            f = st.file_uploader("Excel", type="xlsx")
+            if f and st.button("PROCESSAR"):
+                df_up = pd.read_excel(f).astype(str).replace('nan', '')
                 for _, r in df_up.iterrows():
-                    t_up = str(r['TAG']).strip()
-                    if t_up in df['TAG'].values:
-                        idx_g = df.index[df['TAG'] == t_up][0] + 2
+                    if r['TAG'] in df['TAG'].values:
+                        idx_g = df.index[df['TAG'] == r['TAG']][0] + 2
                         s = calcular_status(r.get('DATA INIC PROG'), r.get('DATA MONT'))
                         for c in ['DATA INIC PROG', 'DATA FIM PROG', 'PREVISTO', 'DATA MONT']:
-                            if c in cols_map: ws.update_cell(idx_g, cols_map[c], str(r.get(c, '')))
-                        if 'STATUS' in cols_map: ws.update_cell(idx_g, cols_map['STATUS'], s)
-                st.success("Carga realizada!")
+                            if c in cols: ws.update_cell(idx_g, cols[c], str(r.get(c, '')))
+                        if 'STATUS' in cols: ws.update_cell(idx_g, cols['STATUS'], s)
+                st.success("Carga OK!")
                 st.rerun()
 except Exception as e:
     st.error(f"Erro: {e}")
