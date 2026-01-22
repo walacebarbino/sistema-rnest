@@ -15,7 +15,6 @@ if 'logado' not in st.session_state:
     st.session_state['logado'] = False
 
 def tela_login():
-    # Centraliza o login usando colunas
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
@@ -67,11 +66,11 @@ def calcular_status(previsto, d_i, d_f, d_m):
     if tem(previsto): return "PREVISTO"
     return "AGUARDANDO PROG"
 
-# --- CARREGAMENTO DE DADOS (RNEST) ---
+# --- CARREGAMENTO DE DADOS ---
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
-# --- INTERFACE LATERAL ---
+# --- INTERFACE ---
 st.sidebar.image("LOGO2.jpeg", width=120)
 st.sidebar.divider()
 disc = st.sidebar.selectbox("TRABALHAR COM:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
@@ -80,7 +79,6 @@ aba = st.sidebar.radio("AÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "�
 df_atual = df_ele if disc == "ELÉTRICA" else df_ins
 ws_atual = ws_ele if disc == "ELÉTRICA" else ws_ins
 
-# Título Principal
 st.markdown(f"### 🛠️ GESTÃO MONTAGEM ELE-INST - RNEST")
 st.divider()
 
@@ -89,7 +87,7 @@ if not df_atual.empty:
 
     # --- ABA 1: EDIÇÃO E QUADRO GERAL ---
     if aba == "📝 EDIÇÃO E QUADRO":
-        st.subheader(f"🛠️ Edição por TAG - {disc}")
+        st.subheader(f"🛠️ Editar TAG de {disc}")
         lista_tags = sorted(df_atual['TAG'].unique())
         tag_sel = st.selectbox("Selecione o TAG:", lista_tags)
         idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
@@ -110,12 +108,11 @@ if not df_atual.empty:
                     if col in cols_map: ws_atual.update_cell(linha, cols_map[col], val)
                 st.success("Dados salvos!")
                 st.rerun()
-
         st.divider()
-        st.subheader("📋 Quadro Geral de Dados") # Quadro abaixo da edição
+        st.subheader("📋 Quadro Geral de Dados")
         st.dataframe(df_atual, use_container_width=True)
 
-    # --- ABA 2: CURVA S COM INDICADORES ACIMA (CORRIGIDA) ---
+    # --- ABA 2: CURVA S COM INDICADORES ACIMA ---
     elif aba == "📊 CURVA S":
         def gerar_curva_data(df):
             if df.empty: return None
@@ -131,8 +128,7 @@ if not df_atual.empty:
             df_res['REALIZADO'] = [len(df_c[df_c['DATA MONT'] <= d]) for d in eixo_x]
             return df_res
 
-        col_g1, col_g2 = st.columns(2) # Gráficos lado a lado
-        
+        col_g1, col_g2 = st.columns(2)
         with col_g1:
             if not df_ele.empty:
                 p_ele = (len(df_ele[df_ele['STATUS']=='MONTADO'])/len(df_ele))*100
@@ -153,21 +149,39 @@ if not df_atual.empty:
                     st.plotly_chart(px.line(df_res_ins, title="Curva S - INSTRUMENTAÇÃO"), use_container_width=True)
                 else: st.warning("Sem datas para Instrumentação.")
 
-    # --- ABA 3: CARGA EM MASSA ---
+    # --- ABA 3: CARGA EM MASSA (COM EXPORTAÇÃO E IMPORTAÇÃO REATIVADAS) ---
     elif aba == "📤 CARGA EM MASSA":
-        st.subheader("Carga via Excel") #
-        up = st.file_uploader("Suba o arquivo .xlsx", type="xlsx")
-        if up and st.button("🚀 Processar"):
-            df_up = pd.read_excel(up).astype(str).replace('nan', '')
-            for _, r in df_up.iterrows():
-                if r['TAG'] in df_atual['TAG'].values:
-                    idx = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
-                    st_n = calcular_status(r.get('PREVISTO',''), r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT',''))
-                    for col in ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']:
-                        if col in cols_map: ws_atual.update_cell(idx, cols_map[col], r.get(col, ''))
-                    if 'STATUS' in cols_map: ws_atual.update_cell(idx, cols_map['STATUS'], st_n)
-            st.success("Base atualizada!")
-            st.rerun()
+        st.subheader(f"Gerenciamento via Excel - {disc}") #
+        
+        # 1. CAIXA DE EXPORTAÇÃO
+        with st.expander("📥 EXPORTAR MODELO ATUAL", expanded=True):
+            st.write("Baixe a planilha atual para editar os dados no Excel e depois subir novamente.")
+            colunas_excel = ['TAG', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
+            df_export = df_atual[[c for c in colunas_excel if c in df_atual.columns]]
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df_export.to_excel(writer, index=False, sheet_name='Dados')
+            st.download_button(label="⬇️ Baixar Planilha (.xlsx)", data=output.getvalue(), file_name=f"Modelo_{disc}_RNEST.xlsx")
+
+        st.divider()
+
+        # 2. CAIXA DE IMPORTAÇÃO
+        with st.expander("🚀 IMPORTAR ATUALIZAÇÕES EM MASSA", expanded=True):
+            up = st.file_uploader("Arraste o arquivo editado aqui", type="xlsx") #
+            if up and st.button("CONFIRMAR IMPORTAÇÃO"):
+                df_up = pd.read_excel(up).astype(str).replace('nan', '')
+                sucesso = 0
+                for _, r in df_up.iterrows():
+                    if r['TAG'] in df_atual['TAG'].values:
+                        idx = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
+                        st_n = calcular_status(r.get('PREVISTO',''), r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT',''))
+                        # Atualiza células individualmente no Sheets
+                        for col in ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']:
+                            if col in cols_map: ws_atual.update_cell(idx, cols_map[col], r.get(col, ''))
+                        if 'STATUS' in cols_map: ws_atual.update_cell(idx, cols_map['STATUS'], st_n)
+                        sucesso += 1
+                st.success(f"✅ {sucesso} TAGs atualizados com sucesso!")
+                st.rerun()
 
 if st.sidebar.button("🚪 SAIR"):
     st.session_state['logado'] = False
