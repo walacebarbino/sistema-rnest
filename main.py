@@ -7,22 +7,17 @@ import gspread
 st.set_page_config(page_title="SISTEMA RNEST", layout="wide")
 
 @st.cache_resource
-def conectar_google():
+def conectar():
     try:
-        # Pega os dados dos Secrets
-        s_info = dict(st.secrets["gcp_service_account"])
-        
-        # --- LIMPEZA AUTOMÁTICA DA CHAVE ---
-        # Remove espaços, converte \n e limpa caracteres invisíveis
-        raw_key = s_info["private_key"].replace("\\n", "\n")
-        lines = [line.strip() for line in raw_key.split('\n') if line.strip()]
-        s_info["private_key"] = '\n'.join(lines)
+        info = dict(st.secrets["gcp_service_account"])
+        # Limpeza agressiva: remove quebras reais e substitui os \n de texto por quebras reais
+        clean_key = info["private_key"].replace("\\n", "\n").replace("\r", "").strip()
+        info["private_key"] = clean_key
         
         scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(s_info, scopes=scope)
-        return gspread.authorize(creds)
+        return gspread.authorize(Credentials.from_service_account_info(info, scopes=scope))
     except Exception as e:
-        st.error(f"Erro na Autenticação (Verifique os Secrets): {e}")
+        st.error(f"Erro de Autenticação: {e}")
         st.stop()
 
 client = conectar_google()
