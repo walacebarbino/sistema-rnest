@@ -97,30 +97,24 @@ if not df_atual.empty:
             except: return None
 
         with st.form("form_edit"):
-            st.markdown(f"#### Editando TAG: **{tag_sel}**")
+            st.markdown(f"#### Editando: **{tag_sel}**")
             
-            # PRIMEIRA LINHA: DATAS DE PROGRAMAÇÃO
-            c1, c2 = st.columns(2)
-            v_ini = c1.date_input("📅 Data Início Prog", value=converter_para_data(dados_tag.get('DATA INIC PROG')), format="DD/MM/YYYY")
-            v_fim = c2.date_input("📅 Data Fim Prog", value=converter_para_data(dados_tag.get('DATA FIM PROG')), format="DD/MM/YYYY")
+            # AS 4 COLUNAS ENFILEIRADAS COM O MESMO TAMANHO
+            c1, c2, c3, c4 = st.columns(4)
             
-            st.divider()
+            v_ini = c1.date_input("Início Prog", value=converter_para_data(dados_tag.get('DATA INIC PROG')), format="DD/MM/YYYY")
+            v_fim = c2.date_input("Fim Prog", value=converter_para_data(dados_tag.get('DATA FIM PROG')), format="DD/MM/YYYY")
+            v_mont = c3.date_input("Montagem", value=converter_para_data(dados_tag.get('DATA MONT')), format="DD/MM/YYYY")
             
-            # SEGUNDA LINHA: DATA MONTAGEM E STATUS LADO A LADO
-            c3, c4 = st.columns([1, 1])
-            v_mont = c3.date_input("✅ Data Montagem", value=converter_para_data(dados_tag.get('DATA MONT')), format="DD/MM/YYYY")
-            
-            # Cálculo do status em tempo real para exibição visual
+            # Status Curto e Alinhado
             status_visual = calcular_status_tag(v_ini, v_fim, v_mont)
-            
-            # Exibe o status ao lado da data de montagem
-            c4.markdown("### Status da TAG:")
+            c4.markdown("**Status:**")
             if status_visual == "MONTADO":
-                c4.success(f"🟢 {status_visual}")
+                c4.success(status_visual)
             elif status_visual == "PROGRAMADO":
-                c4.warning(f"🟡 {status_visual}")
+                c4.warning(status_visual)
             else:
-                c4.info(f"⚪ {status_visual}")
+                c4.info(status_visual)
             
             v_obs = st.text_input("Observação:", value=dados_tag.get('OBS', ''))
             
@@ -136,22 +130,8 @@ if not df_atual.empty:
                 for col, val in campos.items():
                     if col in cols_map: ws_atual.update_cell(linha, cols_map[col], val)
                 
-                st.success(f"TAG {tag_sel} salva com sucesso!")
+                st.success(f"TAG {tag_sel} atualizada!")
                 st.rerun()
         
+        st.divider()
         st.dataframe(df_atual, use_container_width=True, hide_index=True)
-
-    # --- AS OUTRAS ABAS (CURVA S, RELATÓRIOS, CARGA) CONTINUAM FUNCIONANDO IGUAL ---
-    elif aba == "📊 CURVA S":
-        # (Código omitido aqui por brevidade, mas mantido no seu sistema)
-        st.info("Curva S carregada com as novas regras de Status.")
-        # ... (mesmo código de curva S anterior)
-    
-    elif aba == "📋 RELATÓRIOS":
-        # (Código omitido aqui por brevidade, mas mantido no seu sistema)
-        st.info("Relatórios baseados em: MONTADO, PROGRAMADO e AGUARDANDO PROG.")
-        # ... (mesmo código de relatórios anterior)
-
-    elif aba == "📤 CARGA EM MASSA":
-        # ... (mesmo código de exportar toda a planilha e carregar)
-        st.info("Carga em massa ativa.")
