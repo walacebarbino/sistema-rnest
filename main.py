@@ -3,7 +3,7 @@ import pandas as pd
 from google.oauth2.service_account import Credentials
 import gspread
 
-# --- 1. ACESSO ---
+# --- 1. CONFIGURAÇÃO DE ACESSO ---
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
 client = gspread.authorize(creds)
@@ -14,6 +14,7 @@ st.sidebar.title("🛠️ GESTÃO RNEST")
 disc = st.sidebar.selectbox("Disciplina:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
 aba = st.sidebar.radio("Navegação:", ["📊 Quadro Geral", "📝 Lançar Individual", "📤 Carga em Massa"])
 
+# Função de Regra de Status
 def calcular_status(d_i, d_m):
     if d_m and str(d_m).strip() != "" and str(d_m).lower() != 'nan':
         return "MONTADO"
@@ -23,13 +24,17 @@ def calcular_status(d_i, d_m):
         return "AGUARDANDO PROG"
 
 try:
-    sh = client.open("BD_ELE") if disc == "ELÉTRICA" else client.open("BD_INST")
+    nome_planilha = "BD_ELE" if disc == "ELÉTRICA" else "BD_INST"
+    sh = client.open(nome_planilha)
     ws = sh.get_worksheet(0)
-    valores = ws.get_all_values()
     
-    if valores:
-        df = pd.DataFrame(valores[1:], columns=valores[0])
-        cols_map = {col: i + 1 for i, col in enumerate(valores[0])}
+    # PEGA OS DADOS (Evita o erro <Response [200]>)
+    dados_brutos = ws.get_all_values()
+    
+    if len(dados_brutos) > 0:
+        # Transforma em DataFrame usando a primeira linha como cabeçalho
+        df = pd.DataFrame(dados_brutos[1:], columns=dados_brutos[0])
+        cols_map = {col: i + 1 for i, col in enumerate(dados_brutos[0])}
 
         if aba == "📊 Quadro Geral":
             st.header(f"Quadro Geral: {disc}")
@@ -37,7 +42,7 @@ try:
 
         elif aba == "📝 Lançar Individual":
             st.header(f"Atualização Manual - {disc}")
-            tag_alvo = st.selectbox("TAG:", df['TAG'].unique())
+            tag_alvo = st.selectbox("Selecione o TAG:", df['TAG'].unique())
             dados_tag = df[df['TAG'] == tag_alvo].iloc[0]
             idx_plan = df.index[df['TAG'] == tag_alvo][0] + 2
             
@@ -50,15 +55,20 @@ try:
                 
                 if st.form_submit_button("SALVAR"):
                     n_status = calcular_status(d_i, d_m)
-                    for col, val in zip(['DATA INIC PROG', 'DATA FIM PROG', 'PREVISTO', 'DATA MONT', 'STATUS'], [d_i, d_f, d_p, d_m, n_status]):
+                    # Atualiza as colunas de dados e o status automático
+                    colunas_alvo = ['DATA INIC PROG', 'DATA FIM PROG', 'PREVISTO', 'DATA MONT', 'STATUS']
+                    valores_alvo = [d_i, d_f, d_p, d_m, n_status]
+                    
+                    for col, val in zip(colunas_alvo, valores_alvo):
                         if col in cols_map:
                             ws.update_cell(idx_plan, cols_map[col], val)
-                    st.success(f"TAG {tag_alvo} atualizado! Status: {n_status}")
+                            
+                    st.success(f"TAG {tag_alvo} salvo! Novo Status: {n_status}")
                     st.rerun()
 
         elif aba == "📤 Carga em Massa":
-            st.header(f"Carga em Massa - {disc}")
-            file = st.file_uploader("Arquivo .xlsx", type="xlsx")
+            st.header(f"Carga via Excel - {disc}")
+            file = st.file_uploader("Suba o arquivo .xlsx", type="xlsx")
             if file:
                 df_up = pd.read_excel(file).astype(str).replace('nan', '')
                 if st.button("🚀 PROCESSAR"):
@@ -74,5 +84,7 @@ try:
                         except: continue
                     st.success("Carga finalizada!")
                     st.rerun()
+    else:
+        st.warning("Planilha sem dados ou sem cabeçalho.")
 except Exception as e:
     st.error(f"Erro: {e}")
