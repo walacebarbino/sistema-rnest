@@ -134,14 +134,73 @@ else:
         st.dataframe(df_atual, use_container_width=True)
 
     elif aba == "📤 CARGA EM MASSA":
-        st.subheader("Importar Atualizações via Excel")
-        up = st.file_uploader("Subir planilha preenchida", type="xlsx")
-        if up and st.button("🚀 Processar Arquivo"):
-            df_up = pd.read_excel(up).astype(str).replace('nan', '')
-            for _, r in df_up.iterrows():
-                if r['TAG'] in df_atual['TAG'].values:
-                    i = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
-                    status_n = calcular_status(r.get('PREVISTO'), r.get('DATA INIC PROG'), r.get('DATA FIM PROG'), r.get('DATA MONT'))
-                    if 'STATUS' in cols_map: ws_atual.update_cell(i, cols_map['STATUS'], status_n)
-            st.success("Planilha processada!")
-            st.rerun()
+        st.subheader("Gerenciamento de Dados via Excel")
+        
+        # --- CAIXA 1: EXPORTAR MODELO / BACKUP ---
+        with st.expander("📥 EXPORTAR MODELO PARA PREENCHIMENTO", expanded=True):
+            st.write("Baixe a planilha com as colunas necessárias para atualização.")
+            
+            buffer = BytesIO()
+            # Colunas conforme solicitado
+            colunas_modelo = ['TAG', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
+            
+            # Prepara o DataFrame para exportação
+            if not df_atual.empty:
+                # Garante que as colunas existam antes de filtrar
+                cols_existentes = [c for c in colunas_modelo if c in df_atual.columns]
+                df_export = df_atual[cols_existentes]
+            else:
+                df_export = pd.DataFrame(columns=colunas_modelo)
+            
+            with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                df_export.to_excel(writer, index=False, sheet_name='Planilha_RNEST')
+            
+            st.download_button(
+                label="📥 Baixar Planilha Excel (.xlsx)",
+                data=buffer.getvalue(),
+                file_name=f"Modelo_ICE_CONTROL_{disc}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+        st.divider()
+
+        # --- CAIXA 2: IMPORTAR ATUALIZAÇÕES ---
+        with st.expander("🚀 IMPORTAR ATUALIZAÇÕES EM MASSA", expanded=True):
+            st.write("Suba o arquivo Excel preenchido para atualizar o banco de dados.")
+            up = st.file_uploader("Selecione o arquivo Excel atualizado", type="xlsx", key="up_masse")
+            
+            if up and st.button("🚀 Processar e Gravar na Planilha"):
+                try:
+                    df_up = pd.read_excel(up).astype(str).replace('nan', '')
+                    total_atualizado = 0
+                    
+                    for _, r in df_up.iterrows():
+                        t_import = r['TAG'].strip()
+                        if t_import in df_atual['TAG'].values:
+                            # Localiza a linha correta no Google Sheets
+                            idx_planilha = df_atual.index[df_atual['TAG'] == t_import][0] + 2
+                            
+                            # Cálculo automático do Status
+                            status_n = calcular_status(
+                                r.get('PREVISTO', ''), 
+                                r.get('DATA INIC PROG', ''), 
+                                r.get('DATA FIM PROG', ''), 
+                                r.get('DATA MONT', '')
+                            )
+                            
+                            # Lista de colunas para atualizar
+                            campos = ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
+                            for campo in campos:
+                                if campo in cols_map:
+                                    ws_atual.update_cell(idx_planilha, cols_map[campo], r.get(campo, ''))
+                            
+                            # Grava o Status calculado
+                            if 'STATUS' in cols_map:
+                                ws_atual.update_cell(idx_planilha, cols_map['STATUS'], status_n)
+                            
+                            total_atualizado += 1
+                    
+                    st.success(f"✅ Sucesso! {total_atualizado} TAGs foram atualizados no banco de dados.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao processar: {e}")
