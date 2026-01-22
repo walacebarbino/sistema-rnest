@@ -22,7 +22,7 @@ def tela_login():
         st.subheader("🔐 ACESSO RESTRITO")
         pin = st.text_input("Digite o PIN de acesso:", type="password", max_chars=4)
         if st.button("ENTRAR NO SISTEMA"):
-            if pin == "1234": # Altere sua senha aqui se desejar
+            if pin == "1234":
                 st.session_state['logado'] = True
                 st.rerun()
             else: st.error("PIN Incorreto.")
@@ -65,7 +65,7 @@ def calcular_status(previsto, d_i, d_f, d_m):
     if tem(previsto): return "PREVISTO"
     return "AGUARDANDO PROG"
 
-# --- CARREGAMENTO DE DADOS (RNEST) ---
+# --- CARREGAMENTO DE DADOS ---
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
@@ -79,25 +79,13 @@ aba = st.sidebar.radio("AÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "�
 df_atual = df_ele if disc == "ELÉTRICA" else df_ins
 ws_atual = ws_ele if disc == "ELÉTRICA" else ws_ins
 
-# Barra de Progresso no Topo
 st.markdown(f"### 🛠️ GESTÃO MONTAGEM ELE-INST - RNEST")
-c_m1, c_m2 = st.columns(2)
-with c_m1:
-    if not df_ele.empty:
-        p = (len(df_ele[df_ele['STATUS']=='MONTADO'])/len(df_ele))*100
-        st.write(f"**⚡ ELÉTRICA:** {p:.1f}%")
-        st.progress(p/100)
-with c_m2:
-    if not df_ins.empty:
-        p = (len(df_ins[df_ins['STATUS']=='MONTADO'])/len(df_ins))*100
-        st.write(f"**🔬 INSTRUMENTAÇÃO:** {p:.1f}%")
-        st.progress(p/100)
 st.divider()
 
 if not df_atual.empty:
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
 
-    # --- ABA 1: EDIÇÃO E QUADRO GERAL JUNTOS ---
+    # --- ABA 1: EDIÇÃO E QUADRO GERAL ---
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"🛠️ Editar TAG de {disc}")
         lista_tags = sorted(df_atual['TAG'].unique())
@@ -125,10 +113,8 @@ if not df_atual.empty:
         st.subheader("📋 Quadro Geral de Dados")
         st.dataframe(df_atual, use_container_width=True)
 
-    # --- ABA 2: CURVA S (ELÉTRICA E INSTRUMENTAÇÃO LADO A LADO) ---
+    # --- ABA 2: CURVA S COM INDICADORES ACIMA ---
     elif aba == "📊 CURVA S":
-        st.subheader("📈 Evolução Acumulada das Disciplinas")
-        
         def gerar_curva_data(df):
             df_c = df.copy()
             for c in ['PREVISTO', 'DATA FIM PROG', 'DATA MONT']:
@@ -145,41 +131,42 @@ if not df_atual.empty:
         col_g1, col_g2 = st.columns(2)
         
         with col_g1:
+            # Indicador de % acima da curva de Elétrica
+            if not df_ele.empty:
+                p_ele = (len(df_ele[df_ele['STATUS']=='MONTADO'])/len(df_ele))*100
+                st.write(f"**⚡ ELÉTRICA:** {p_ele:.1f}%")
+                st.progress(p_ele/100)
+            
             df_res_ele = gerar_curva_data(df_ele)
             if df_res_ele is not None:
-                st.plotly_chart(px.line(df_res_ele, title="⚡ Curva S - ELÉTRICA"), use_container_width=True)
-            else: st.info("Sem datas para Elétrica")
+                st.plotly_chart(px.line(df_res_ele, title="Curva S Acumulada - ELÉTRICA"), use_container_width=True)
 
         with col_g2:
+            # Indicador de % acima da curva de Instrumentação
+            if not df_ins.empty:
+                p_ins = (len(df_ins[df_ins['STATUS']=='MONTADO'])/len(df_ins))*100
+                st.write(f"**🔬 INSTRUMENTAÇÃO:** {p_ins:.1f}%")
+                st.progress(p_ins/100)
+            
             df_res_ins = gerar_curva_data(df_ins)
             if df_res_ins is not None:
-                st.plotly_chart(px.line(df_res_ins, title="🔬 Curva S - INSTRUMENTAÇÃO"), use_container_width=True)
-            else: st.info("Sem datas para Instrumentação")
+                st.plotly_chart(px.line(df_res_ins, title="Curva S Acumulada - INSTRUMENTAÇÃO"), use_container_width=True)
 
     # --- ABA 3: CARGA EM MASSA ---
     elif aba == "📤 CARGA EM MASSA":
-        st.subheader("Gerenciamento Excel")
-        with st.expander("📥 EXPORTAR MODELO", expanded=True):
-            col_mod = ['TAG', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
-            df_exp = df_atual[[c for c in col_mod if c in df_atual.columns]]
-            buffer = BytesIO()
-            with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                df_exp.to_excel(writer, index=False)
-            st.download_button("Baixar Excel", buffer.getvalue(), f"Modelo_{disc}.xlsx")
-
-        with st.expander("🚀 IMPORTAR ATUALIZAÇÕES", expanded=True):
-            up = st.file_uploader("Suba o arquivo", type="xlsx")
-            if up and st.button("CONFIRMAR IMPORTAÇÃO"):
-                df_up = pd.read_excel(up).astype(str).replace('nan', '')
-                for _, r in df_up.iterrows():
-                    if r['TAG'] in df_atual['TAG'].values:
-                        idx = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
-                        st_n = calcular_status(r.get('PREVISTO',''), r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT',''))
-                        for col in ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']:
-                            if col in cols_map: ws_atual.update_cell(idx, cols_map[col], r.get(col, ''))
-                        if 'STATUS' in cols_map: ws_atual.update_cell(idx, cols_map['STATUS'], st_n)
-                st.success("Base RNEST atualizada!")
-                st.rerun()
+        st.subheader("Importação via Excel")
+        up = st.file_uploader("Selecione o arquivo .xlsx", type="xlsx")
+        if up and st.button("🚀 Processar"):
+            df_up = pd.read_excel(up).astype(str).replace('nan', '')
+            for _, r in df_up.iterrows():
+                if r['TAG'] in df_atual['TAG'].values:
+                    idx = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
+                    st_n = calcular_status(r.get('PREVISTO',''), r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT',''))
+                    for col in ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']:
+                        if col in cols_map: ws_atual.update_cell(idx, cols_map[col], r.get(col, ''))
+                    if 'STATUS' in cols_map: ws_atual.update_cell(idx, cols_map['STATUS'], st_n)
+            st.success("Base atualizada!")
+            st.rerun()
 
 if st.sidebar.button("🚪 SAIR"):
     st.session_state['logado'] = False
