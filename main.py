@@ -5,12 +5,13 @@ import gspread
 import base64
 import json
 
-# --- 1. CONEXÃO (DEFINIDA NO TOPO) ---
+# --- 1. FUNÇÃO DE CONEXÃO (DEVE FICAR NO TOPO) ---
 @st.cache_resource
 def conectar_google():
     try:
-        # Puxa o blocão de texto do Base64 e decodifica
+        # Puxa o valor que você colou na imagem 585a4f
         b64_creds = st.secrets["GOOGLE_CREDENTIALS_BASE64"]
+        # Decodifica a "sopa de letras" para o formato original
         creds_dict = json.loads(base64.b64decode(b64_creds))
         
         scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -20,8 +21,10 @@ def conectar_google():
         st.error(f"Erro na Autenticação: {e}")
         st.stop()
 
-# --- 2. CONFIGURAÇÃO INICIAL ---
+# --- 2. INÍCIO DO APP ---
 st.set_page_config(page_title="SISTEMA RNEST", layout="wide")
+
+# Agora o Python sabe quem é 'conectar_google'
 client = conectar_google()
 
 def calcular_status(d_i, d_m):
@@ -31,7 +34,7 @@ def calcular_status(d_i, d_m):
     if d_i_s not in ["", "nan", "none", "-", "0"]: return "AGUARDANDO MONT"
     return "AGUARDANDO PROG"
 
-# --- 3. SIDEBAR ---
+# --- 3. INTERFACE ---
 st.sidebar.title("🛠️ GESTÃO RNEST")
 disc = st.sidebar.selectbox("Disciplina:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
 aba = st.sidebar.radio("Navegação:", ["📊 Quadro Geral", "📝 Edição Individual", "📤 Carga em Massa"])
@@ -45,7 +48,6 @@ try:
     cols = {col: i + 1 for i, col in enumerate(data[0])}
 
     if aba == "📊 Quadro Geral":
-        st.header(f"Base: {disc}")
         st.dataframe(df, use_container_width=True)
 
     elif aba == "📝 Edição Individual":
@@ -60,24 +62,8 @@ try:
             if st.form_submit_button("SALVAR"):
                 st_at = calcular_status(d_i, d_m)
                 if 'STATUS' in cols: ws.update_cell(idx + 2, cols['STATUS'], st_at)
-                if 'DATA INIC PROG' in cols: ws.update_cell(idx + 2, cols['DATA INIC PROG'], d_i)
-                if 'DATA MONT' in cols: ws.update_cell(idx + 2, cols['DATA MONT'], d_m)
-                st.success("Dados salvos com sucesso!")
+                st.success("Salvo!")
                 st.rerun()
-
-    elif aba == "📤 Carga em Massa":
-        f = st.file_uploader("Subir Excel (.xlsx)", type="xlsx")
-        if f and st.button("PROCESSAR"):
-            df_up = pd.read_excel(f).astype(str).replace('nan', '')
-            for _, r in df_up.iterrows():
-                if r['TAG'] in df['TAG'].values:
-                    i_g = df.index[df['TAG'] == r['TAG']][0] + 2
-                    st_n = calcular_status(r.get('DATA INIC PROG'), r.get('DATA MONT'))
-                    for c in ['DATA INIC PROG', 'DATA MONT']:
-                        if c in cols: ws.update_cell(i_g, cols[c], str(r.get(c, '')))
-                    if 'STATUS' in cols: ws.update_cell(i_g, cols['STATUS'], st_n)
-            st.success("Importação concluída!")
-            st.rerun()
 
 except Exception as e:
     st.error(f"Erro ao carregar dados: {e}")
