@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="SISTEMA G-MONT", layout="wide")
 
-# --- CSS PARA ALINHAMENTO E PADRONIZAÇÃO ---
+# --- CSS PARA ALINHAMENTO E PADRONIZAÇÃO DAS CAIXAS ---
 st.markdown("""
     <style>
     [data-testid="column"] { padding-left: 5px !important; padding-right: 5px !important; }
@@ -71,7 +71,6 @@ def extrair_dados(nome_planilha):
         if len(data) > 1:
             df = pd.DataFrame(data[1:], columns=data[0])
             df.columns = df.columns.str.strip()
-            # Limpeza rigorosa para evitar o erro das imagens 03e83c e 038375
             for col in df.columns:
                 df[col] = df[col].astype(str).str.strip().replace(['nan', 'None', 'NaT', 'null', 'empty', '-'], '')
             return df, ws
@@ -82,7 +81,6 @@ def extrair_dados(nome_planilha):
 
 # --- LÓGICA DE STATUS REVISADA ---
 def calcular_status_tag(d_i, d_f, d_m):
-    # Função para verificar se a célula tem uma data válida (não vazia)
     def tem_data(v): 
         v_str = str(v).strip()
         return v_str != "" and v_str != "None" and v_str != "nan"
@@ -93,25 +91,28 @@ def calcular_status_tag(d_i, d_f, d_m):
         return "PROGRAMADO"
     return "AGUARDANDO PROG"
 
-# --- CARREGAMENTO ---
+# --- CARREGAMENTO INICIAL ---
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
+# --- BARRA LATERAL ---
 st.sidebar.image("LOGO2.png", width=120)
+st.sidebar.divider()
 disc = st.sidebar.selectbox("TRABALHAR COM:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
 aba = st.sidebar.radio("AÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 CARGA EM MASSA"])
 
 df_atual = df_ele if disc == "ELÉTRICA" else df_ins
 ws_atual = ws_ele if disc == "ELÉTRICA" else ws_ins
 
-if not df_atual.empty:
-    # Garantir que a coluna STATUS existe no DataFrame para os relatórios funcionarem
-    if 'STATUS' not in df_atual.columns:
-        df_atual['STATUS'] = df_atual.apply(lambda r: calcular_status_tag(r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT','')), axis=1)
+st.markdown(f"### 🛠️ GESTÃO MONTAGEM {disc} - RNEST")
+st.divider()
 
+if not df_atual.empty:
+    # Garante que o Status esteja sempre calculado para os relatórios
+    df_atual['STATUS'] = df_atual.apply(lambda r: calcular_status_tag(r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT','')), axis=1)
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
 
-    # --- ABA 1: EDIÇÃO ---
+    # --- ABA 1: EDIÇÃO E QUADRO ---
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader("🛠️ Edição por TAG")
         tag_sel = st.selectbox("Selecione o TAG:", sorted(df_atual['TAG'].unique()))
@@ -123,12 +124,12 @@ if not df_atual.empty:
             except: return None
 
         with st.form("form_edit"):
+            st.markdown(f"**TAG: {tag_sel}**")
             c1, c2, c3, c4 = st.columns(4)
             v_ini = c1.date_input("Início Prog", value=conv_data(dados_tag.get('DATA INIC PROG')), format="DD/MM/YYYY")
             v_fim = c2.date_input("Fim Prog", value=conv_data(dados_tag.get('DATA FIM PROG')), format="DD/MM/YYYY")
             v_mont = c3.date_input("Data Montagem", value=conv_data(dados_tag.get('DATA MONT')), format="DD/MM/YYYY")
             
-            # Recalcula o status visualmente no formulário
             st_auto = calcular_status_tag(v_ini.strftime("%d/%m/%Y") if v_ini else "", 
                                           v_fim.strftime("%d/%m/%Y") if v_fim else "", 
                                           v_mont.strftime("%d/%m/%Y") if v_mont else "")
@@ -150,13 +151,41 @@ if not df_atual.empty:
                 st.rerun()
         st.dataframe(df_atual, use_container_width=True, hide_index=True)
 
-    # --- ABA 3: RELATÓRIOS (CORREÇÃO TOTAL) ---
+    # --- ABA 2: CURVA S ---
+    elif aba == "📊 CURVA S":
+        def gerar_curva_data(df):
+            df_c = df.copy()
+            for c in ['DATA FIM PROG', 'DATA MONT']:
+                if c in df_c.columns:
+                    df_c[c] = pd.to_datetime(df_c[c], dayfirst=True, errors='coerce')
+            datas = pd.concat([df_c[c] for c in ['DATA FIM PROG', 'DATA MONT'] if c in df_c.columns]).dropna()
+            if datas.empty: return None
+            eixo_x = pd.date_range(start=datas.min(), end=datas.max(), freq='D')
+            df_res = pd.DataFrame(index=eixo_x)
+            for c, label in zip(['DATA FIM PROG', 'DATA MONT'], ['PROGRAMADO', 'REALIZADO']):
+                if c in df_c.columns:
+                    df_res[label] = [len(df_c[df_c[c] <= d]) for d in eixo_x]
+            return df_res
+
+        col_g1, col_g2 = st.columns(2)
+        with col_g1:
+            if not df_ele.empty:
+                p_ele = (len(df_ele[df_ele['STATUS']=='MONTADO'])/len(df_ele))*100
+                st.write(f"**⚡ ELÉTRICA: {p_ele:.1f}%**")
+                st.progress(p_ele/100)
+                res_ele = gerar_curva_data(df_ele)
+                if res_ele is not None: st.plotly_chart(px.line(res_ele, title="Curva S - ELÉTRICA"), use_container_width=True)
+        with col_g2:
+            if not df_ins.empty:
+                p_ins = (len(df_ins[df_ins['STATUS']=='MONTADO'])/len(df_ins))*100
+                st.write(f"**🔬 INSTRUMENTAÇÃO: {p_ins:.1f}%**")
+                st.progress(p_ins/100)
+                res_ins = gerar_curva_data(df_ins)
+                if res_ins is not None: st.plotly_chart(px.line(res_ins, title="Curva S - INSTRUMENTAÇÃO"), use_container_width=True)
+
+    # --- ABA 3: RELATÓRIOS ---
     elif aba == "📋 RELATÓRIOS":
-        st.subheader("📊 Painel de Controle e Relatórios")
-        
-        # Atualiza os status no DataFrame para garantir que os contadores reflitam a realidade
-        df_atual['STATUS'] = df_atual.apply(lambda r: calcular_status_tag(r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT','')), axis=1)
-        
+        st.subheader("📊 Painel de Controle")
         total = len(df_atual)
         montados = len(df_atual[df_atual['STATUS'] == 'MONTADO'])
         programados = len(df_atual[df_atual['STATUS'] == 'PROGRAMADO'])
@@ -170,33 +199,28 @@ if not df_atual.empty:
         
         st.divider()
         
-        # RELATÓRIO DE PRODUÇÃO (PROGRAMADOS)
-        st.markdown("### 📋 Lista de Entrega para Produção")
+        # TÍTULO ALTERADO CONFORME SOLICITAÇÃO
+        st.markdown("### 📋 PROGRAMADO PRODUÇÃO")
         df_prod = df_atual[df_atual['STATUS'] == 'PROGRAMADO'].copy()
         if not df_prod.empty:
-            cols_visiveis = ['TAG', 'DATA INIC PROG', 'DATA FIM PROG', 'DESCRIÇÃO', 'ÁREA']
-            # Filtra apenas colunas que realmente existem para evitar KeyError (Erro da imagem 03e83c)
-            df_prod_show = df_prod[[c for c in cols_visiveis if c in df_prod.columns]]
+            cols_prod = ['TAG', 'DATA INIC PROG', 'DATA FIM PROG', 'DESCRIÇÃO', 'ÁREA', 'OBS']
+            df_prod_show = df_prod[[c for c in cols_prod if c in df_prod.columns]]
             st.dataframe(df_prod_show, use_container_width=True, hide_index=True)
             
             buf_p = BytesIO()
             with pd.ExcelWriter(buf_p, engine='xlsxwriter') as writer:
-                df_prod_show.to_excel(writer, index=False, sheet_name='PROGRAMACAO')
-            st.download_button("📥 BAIXAR LISTA DE PRODUÇÃO", buf_p.getvalue(), f"producao_{disc}.xlsx", use_container_width=True)
+                df_prod_show.to_excel(writer, index=False, sheet_name='PRODUCAO')
+            st.download_button("📥 BAIXAR LISTA PROGRAMADO PRODUÇÃO", buf_p.getvalue(), f"producao_{disc}.xlsx", use_container_width=True)
         else:
-            st.warning("Não há TAGs com status PROGRAMADO no momento.")
+            st.warning("Nenhum item com status PROGRAMADO.")
 
         st.divider()
-        
-        # RELATÓRIOS DE PENDÊNCIAS E SEMANAL
         col_l, col_r = st.columns(2)
         with col_l:
             st.markdown("#### 🚩 Pendências Totais")
             df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
-            cols_pend = ['TAG', 'STATUS', 'OBS']
-            df_pend_show = df_pend[[c for c in cols_pend if c in df_pend.columns]]
+            df_pend_show = df_pend[['TAG', 'STATUS', 'OBS']] if 'OBS' in df_pend.columns else df_pend[['TAG', 'STATUS']]
             st.dataframe(df_pend_show, use_container_width=True, hide_index=True)
-            
             buf_pend = BytesIO()
             with pd.ExcelWriter(buf_pend, engine='xlsxwriter') as writer:
                 df_pend_show.to_excel(writer, index=False)
@@ -206,20 +230,48 @@ if not df_atual.empty:
             st.markdown("#### 📈 Realizado (7 Dias)")
             df_atual['DT_TEMP'] = pd.to_datetime(df_atual['DATA MONT'], dayfirst=True, errors='coerce')
             df_sem = df_atual[df_atual['DT_TEMP'] >= (datetime.now() - timedelta(days=7))]
-            cols_sem = ['TAG', 'DATA MONT', 'OBS']
-            df_sem_show = df_sem[[c for c in cols_sem if c in df_sem.columns]]
+            df_sem_show = df_sem[['TAG', 'DATA MONT', 'OBS']] if 'OBS' in df_sem.columns else df_sem[['TAG', 'DATA MONT']]
             st.dataframe(df_sem_show, use_container_width=True, hide_index=True)
-            
             buf_sem = BytesIO()
             with pd.ExcelWriter(buf_sem, engine='xlsxwriter') as writer:
                 df_sem_show.to_excel(writer, index=False)
-            st.download_button("📥 Exportar Semanal", buf_sem.getvalue(), "realizado_semana.xlsx")
+            st.download_button("📥 Exportar Realizado", buf_sem.getvalue(), "realizado_semana.xlsx")
 
-    # --- ABA CURVA S E CARGA EM MASSA (CÓDIGOS MANTIDOS) ---
-    elif aba == "📊 CURVA S":
-        st.info("Curva S baseada nos dados atuais.")
-        # ... (insira aqui o código da curva s fornecido anteriormente)
-    
+    # --- ABA 4: CARGA EM MASSA ---
     elif aba == "📤 CARGA EM MASSA":
-        st.info("Área de importação ativa.")
-        # ... (insira aqui o código da carga em massa fornecido anteriormente)
+        st.subheader("Carga e Download")
+        c_exp1, c_exp2 = st.columns(2)
+        with c_exp1:
+            st.info("📥 **MODELO**")
+            col_mod = ['TAG', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
+            df_mod = df_atual[[c for c in col_mod if c in df_atual.columns]]
+            buf = BytesIO()
+            with pd.ExcelWriter(buf, engine='xlsxwriter') as writer:
+                df_mod.to_excel(writer, index=False)
+            st.download_button("Baixar Modelo", buf.getvalue(), f"modelo_{disc}.xlsx", use_container_width=True)
+        with c_exp2:
+            st.success("📂 **FULL EXPORT**")
+            buf_f = BytesIO()
+            with pd.ExcelWriter(buf_f, engine='xlsxwriter') as writer:
+                df_atual.to_excel(writer, index=False)
+            st.download_button("Exportar Base Completa", buf_f.getvalue(), f"DB_{disc}.xlsx", use_container_width=True)
+            
+        st.divider()
+        up = st.file_uploader("Selecione o arquivo Excel atualizado:", type="xlsx")
+        if up and st.button("CONFIRMAR CARGA"):
+            df_up = pd.read_excel(up).astype(str).replace('nan', '')
+            prog = st.progress(0)
+            for i, (_, r) in enumerate(df_up.iterrows()):
+                if r['TAG'] in df_atual['TAG'].values:
+                    idx = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
+                    s_auto = calcular_status_tag(r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT',''))
+                    for col in ['DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']:
+                        if col in cols_map: ws_atual.update_cell(idx, cols_map[col], r.get(col, ''))
+                    if 'STATUS' in cols_map: ws_atual.update_cell(idx, cols_map['STATUS'], s_auto)
+                prog.progress((i + 1) / len(df_up))
+            st.success("Dados importados!")
+            st.rerun()
+
+if st.sidebar.button("🚪 SAIR"):
+    st.session_state['logado'] = False
+    st.rerun()
