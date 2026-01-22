@@ -14,27 +14,29 @@ st.sidebar.title("🛠️ GESTÃO RNEST")
 disc = st.sidebar.selectbox("Disciplina:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
 aba = st.sidebar.radio("Navegação:", ["📊 Quadro Geral", "📝 Lançar Individual", "📤 Carga em Massa"])
 
-# Função de Regra de Status
 def calcular_status(d_i, d_m):
-    if d_m and str(d_m).strip() != "" and str(d_m).lower() != 'nan':
+    # Trata valores nulos ou vazios para não dar erro
+    if d_m and str(d_m).strip() not in ["", "nan", "None"]:
         return "MONTADO"
-    elif d_i and str(d_i).strip() != "" and str(d_i).lower() != 'nan':
+    elif d_i and str(d_i).strip() not in ["", "nan", "None"]:
         return "AGUARDANDO MONT"
     else:
         return "AGUARDANDO PROG"
 
 try:
-    nome_planilha = "BD_ELE" if disc == "ELÉTRICA" else "BD_INST"
-    sh = client.open(nome_planilha)
+    # Abre a planilha correta conforme a disciplina
+    nome_plan = "BD_ELE" if disc == "ELÉTRICA" else "BD_INST"
+    sh = client.open(nome_plan)
     ws = sh.get_worksheet(0)
     
-    # PEGA OS DADOS (Evita o erro <Response [200]>)
-    dados_brutos = ws.get_all_values()
+    # get_all_values() é mais seguro para planilhas com buracos/vazios
+    dados_lista = ws.get_all_values()
     
-    if len(dados_brutos) > 0:
-        # Transforma em DataFrame usando a primeira linha como cabeçalho
-        df = pd.DataFrame(dados_brutos[1:], columns=dados_brutos[0])
-        cols_map = {col: i + 1 for i, col in enumerate(dados_brutos[0])}
+    if len(dados_lista) > 1:
+        # Criando o DataFrame e limpando nomes de colunas
+        df = pd.DataFrame(dados_lista[1:], columns=dados_lista[0])
+        df.columns = [c.strip() for c in df.columns]
+        cols_map = {col: i + 1 for i, col in enumerate(df.columns)}
 
         if aba == "📊 Quadro Geral":
             st.header(f"Quadro Geral: {disc}")
@@ -42,7 +44,10 @@ try:
 
         elif aba == "📝 Lançar Individual":
             st.header(f"Atualização Manual - {disc}")
-            tag_alvo = st.selectbox("Selecione o TAG:", df['TAG'].unique())
+            # Filtra apenas TAGs que não estão vazios
+            tags_disponiveis = [t for t in df['TAG'].unique() if t.strip() != ""]
+            tag_alvo = st.selectbox("Selecione o TAG:", tags_disponiveis)
+            
             dados_tag = df[df['TAG'] == tag_alvo].iloc[0]
             idx_plan = df.index[df['TAG'] == tag_alvo][0] + 2
             
@@ -55,36 +60,41 @@ try:
                 
                 if st.form_submit_button("SALVAR"):
                     n_status = calcular_status(d_i, d_m)
-                    # Atualiza as colunas de dados e o status automático
-                    colunas_alvo = ['DATA INIC PROG', 'DATA FIM PROG', 'PREVISTO', 'DATA MONT', 'STATUS']
-                    valores_alvo = [d_i, d_f, d_p, d_m, n_status]
+                    # Lista de atualizações para as colunas principais
+                    campos = {'DATA INIC PROG': d_i, 'DATA FIM PROG': d_f, 
+                              'PREVISTO': d_p, 'DATA MONT': d_m, 'STATUS': n_status}
                     
-                    for col, val in zip(colunas_alvo, valores_alvo):
-                        if col in cols_map:
-                            ws.update_cell(idx_plan, cols_map[col], val)
-                            
-                    st.success(f"TAG {tag_alvo} salvo! Novo Status: {n_status}")
+                    for col_nome, valor in campos.items():
+                        if col_nome in cols_map:
+                            ws.update_cell(idx_plan, cols_map[col_nome], str(valor))
+                    
+                    st.success(f"TAG {tag_alvo} atualizado! Status: {n_status}")
                     st.rerun()
 
         elif aba == "📤 Carga em Massa":
-            st.header(f"Carga via Excel - {disc}")
+            st.header(f"Importação de Excel - {disc}")
             file = st.file_uploader("Suba o arquivo .xlsx", type="xlsx")
             if file:
                 df_up = pd.read_excel(file).astype(str).replace('nan', '')
                 if st.button("🚀 PROCESSAR"):
                     for _, row in df_up.iterrows():
                         try:
-                            m_idx = df.index[df['TAG'] == str(row['TAG'])][0] + 2
-                            n_stat = calcular_status(row.get('DATA INIC PROG'), row.get('DATA MONT'))
-                            for c in ['DATA INIC PROG', 'DATA FIM PROG', 'PREVISTO', 'DATA MONT']:
-                                if c in df_up.columns and c in cols_map:
-                                    ws.update_cell(m_idx, cols_map[c], str(row[c]))
-                            if 'STATUS' in cols_map:
-                                ws.update_cell(m_idx, cols_map['STATUS'], n_stat)
+                            # Localiza a linha correta na planilha baseada no TAG
+                            tag_import = str(row['TAG']).strip()
+                            if tag_import in df['TAG'].values:
+                                m_idx = df.index[df['TAG'] == tag_import][0] + 2
+                                stat = calcular_status(row.get('DATA INIC PROG'), row.get('DATA MONT'))
+                                
+                                for c in ['DATA INIC PROG', 'DATA FIM PROG', 'PREVISTO', 'DATA MONT']:
+                                    if c in df_up.columns and c in cols_map:
+                                        ws.update_cell(m_idx, cols_map[c], str(row[c]))
+                                if 'STATUS' in cols_map:
+                                    ws.update_cell(m_idx, cols_map['STATUS'], stat)
                         except: continue
-                    st.success("Carga finalizada!")
+                    st.success("Dados processados com sucesso!")
                     st.rerun()
     else:
-        st.warning("Planilha sem dados ou sem cabeçalho.")
+        st.error("A planilha parece estar vazia ou sem o cabeçalho correto na linha 1.")
+
 except Exception as e:
-    st.error(f"Erro: {e}")
+    st.error(f"Erro detectado: {e}")
