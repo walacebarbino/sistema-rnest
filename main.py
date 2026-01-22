@@ -55,6 +55,8 @@ def extrair_dados(nome_planilha):
         data = ws.get_all_values()
         if len(data) > 1:
             df = pd.DataFrame(data[1:], columns=data[0])
+            # Limpa espaços em branco nos nomes das colunas para evitar o KeyError
+            df.columns = df.columns.str.strip()
             return df, ws
         return pd.DataFrame(), None
     except: return pd.DataFrame(), None
@@ -71,18 +73,11 @@ def calcular_status(previsto, d_i, d_f, d_m):
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
-# --- INTERFACE LATERAL ---
+# --- INTERFACE ---
 st.sidebar.image("LOGO2.jpeg", width=120)
 st.sidebar.divider()
 disc = st.sidebar.selectbox("TRABALHAR COM:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
-
-# Nova Estrutura de Ações na Lateral
-aba = st.sidebar.radio("AÇÃO:", [
-    "📝 EDIÇÃO E QUADRO", 
-    "📊 CURVA S", 
-    "📋 RELATÓRIOS",
-    "📤 CARGA EM MASSA"
-])
+aba = st.sidebar.radio("AÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 CARGA EM MASSA"])
 
 df_atual = df_ele if disc == "ELÉTRICA" else df_ins
 ws_atual = ws_ele if disc == "ELÉTRICA" else ws_ins
@@ -93,11 +88,11 @@ st.divider()
 if not df_atual.empty:
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
 
-    # --- ABA 1: EDIÇÃO E QUADRO GERAL ---
+    # --- ABA 1: EDIÇÃO E QUADRO ---
     if aba == "📝 EDIÇÃO E QUADRO":
-        st.subheader(f"🛠️ Editar TAG de {disc}")
+        st.subheader(f"🛠️ Edição por TAG - {disc}")
         lista_tags = sorted(df_atual['TAG'].unique())
-        tag_sel = st.selectbox("Selecione o TAG para editar:", lista_tags)
+        tag_sel = st.selectbox("Selecione o TAG:", lista_tags)
         idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
         dados_tag = df_atual.iloc[idx_base]
         
@@ -117,7 +112,6 @@ if not df_atual.empty:
                 st.success("Dados salvos!")
                 st.rerun()
         st.divider()
-        st.subheader("📋 Quadro Geral de Dados")
         st.dataframe(df_atual, use_container_width=True)
 
     # --- ABA 2: CURVA S ---
@@ -126,14 +120,16 @@ if not df_atual.empty:
             if df.empty: return None
             df_c = df.copy()
             for c in ['PREVISTO', 'DATA FIM PROG', 'DATA MONT']:
-                df_c[c] = pd.to_datetime(df_c[c], dayfirst=True, errors='coerce')
-            datas = pd.concat([df_c['PREVISTO'], df_c['DATA FIM PROG'], df_c['DATA MONT']]).dropna()
+                if c in df_c.columns:
+                    df_c[c] = pd.to_datetime(df_c[c], dayfirst=True, errors='coerce')
+            
+            datas = pd.concat([df_c[c] for c in ['PREVISTO', 'DATA FIM PROG', 'DATA MONT'] if c in df_c.columns]).dropna()
             if datas.empty: return None
             eixo_x = pd.date_range(start=datas.min(), end=datas.max(), freq='D')
             df_res = pd.DataFrame(index=eixo_x)
-            df_res['PREVISTO'] = [len(df_c[df_c['PREVISTO'] <= d]) for d in eixo_x]
-            df_res['PROGRAMADO'] = [len(df_c[df_c['DATA FIM PROG'] <= d]) for d in eixo_x]
-            df_res['REALIZADO'] = [len(df_c[df_c['DATA MONT'] <= d]) for d in eixo_x]
+            for c, label in zip(['PREVISTO', 'DATA FIM PROG', 'DATA MONT'], ['PREVISTO', 'PROGRAMADO', 'REALIZADO']):
+                if c in df_c.columns:
+                    df_res[label] = [len(df_c[df_c[c] <= d]) for d in eixo_x]
             return df_res
 
         col_g1, col_g2 = st.columns(2)
@@ -143,9 +139,8 @@ if not df_atual.empty:
                 st.write(f"**⚡ ELÉTRICA: {p_ele:.1f}%**")
                 st.progress(p_ele/100)
                 df_res_ele = gerar_curva_data(df_ele)
-                if df_res_ele is not None:
-                    st.plotly_chart(px.line(df_res_ele, title="Curva S - ELÉTRICA"), use_container_width=True)
-                else: st.warning("Sem datas para Elétrica.") #
+                if df_res_ele is not None: st.plotly_chart(px.line(df_res_ele, title="Curva S - ELÉTRICA"), use_container_width=True)
+                else: st.warning("Sem datas para Elétrica.")
 
         with col_g2:
             if not df_ins.empty:
@@ -153,70 +148,74 @@ if not df_atual.empty:
                 st.write(f"**🔬 INSTRUMENTAÇÃO: {p_ins:.1f}%**")
                 st.progress(p_ins/100)
                 df_res_ins = gerar_curva_data(df_ins)
-                if df_res_ins is not None:
-                    st.plotly_chart(px.line(df_res_ins, title="Curva S - INSTRUMENTAÇÃO"), use_container_width=True)
-                else: st.warning("Sem datas para Instrumentação.") #
+                if df_res_ins is not None: st.plotly_chart(px.line(df_res_ins, title="Curva S - INSTRUMENTAÇÃO"), use_container_width=True)
+                else: st.warning("Sem datas para Instrumentação.")
 
-    # --- NOVA ABA 3: RELATÓRIOS DE PENDÊNCIAS E AVANÇOS ---
+    # --- ABA 3: RELATÓRIOS (FIXED KEYERROR) ---
     elif aba == "📋 RELATÓRIOS":
         st.subheader(f"📊 Relatórios Detalhados - {disc}")
         
-        # Processamento de datas para o semanal
         df_rep = df_atual.copy()
-        df_rep['DATA MONT'] = pd.to_datetime(df_rep['DATA MONT'], dayfirst=True, errors='coerce')
+        # Converte para data com segurança
+        if 'DATA MONT' in df_rep.columns:
+            df_rep['DATA MONT'] = pd.to_datetime(df_rep['DATA MONT'], dayfirst=True, errors='coerce')
+        
         hoje = datetime.now()
         inicio_semana = hoje - timedelta(days=7)
 
-        # Cálculos
+        # Métricas
         total_tags = len(df_rep)
-        montados = len(df_rep[df_rep['STATUS'] == 'MONTADO'])
+        montados = len(df_rep[df_rep['STATUS'] == 'MONTADO']) if 'STATUS' in df_rep.columns else 0
         pendentes = total_tags - montados
-        avanco_semanal = len(df_rep[df_rep['DATA MONT'] >= inicio_semana])
+        avanco_semanal = len(df_rep[df_rep['DATA MONT'] >= inicio_semana]) if 'DATA MONT' in df_rep.columns else 0
 
         c_r1, c_r2, c_r3, c_r4 = st.columns(4)
         c_r1.metric("Total de TAGs", total_tags)
         c_r2.metric("Total Montado", montados)
-        c_r3.metric("Pendências", pendentes, delta_color="inverse")
+        c_r3.metric("Pendências", pendentes)
         c_r4.metric("Avanço 7 Dias", avanco_semanal)
 
         st.divider()
-        
         col_r_left, col_r_right = st.columns(2)
         
+        # Filtro dinâmico de colunas para evitar o erro de 'not in index'
+        colunas_pend = [c for c in ['TAG', 'STATUS', 'OBS'] if c in df_rep.columns]
+        colunas_avanco = [c for c in ['TAG', 'DATA MONT', 'OBS'] if c in df_rep.columns]
+
         with col_r_left:
             st.markdown("#### 🚩 Lista de Pendências")
-            df_pend = df_rep[df_rep['STATUS'] != 'MONTADO'][['TAG', 'STATUS', 'OBS']]
-            st.dataframe(df_pend, use_container_width=True, hide_index=True)
-            
-            # Botão para extrair pendências
-            buf_p = BytesIO()
-            df_pend.to_excel(buf_p, index=False)
-            st.download_button("📥 Extrair Pendências (Excel)", buf_p.getvalue(), f"Pendencias_{disc}.xlsx")
+            if 'STATUS' in df_rep.columns:
+                df_pend = df_rep[df_rep['STATUS'] != 'MONTADO'][colunas_pend]
+                st.dataframe(df_pend, use_container_width=True, hide_index=True)
+                buf_p = BytesIO()
+                df_pend.to_excel(buf_p, index=False)
+                st.download_button("📥 Baixar Pendências", buf_p.getvalue(), f"Pendencias_{disc}.xlsx")
 
         with col_r_right:
             st.markdown("#### 📈 Avanço da Semana")
-            df_sem = df_rep[df_rep['DATA MONT'] >= inicio_semana][['TAG', 'DATA MONT', 'OBS']]
-            st.dataframe(df_sem, use_container_width=True, hide_index=True)
-            
-            # Botão para extrair avanço semanal
-            buf_s = BytesIO()
-            df_sem.to_excel(buf_s, index=False)
-            st.download_button("📥 Extrair Avanço Semanal (Excel)", buf_s.getvalue(), f"Avanco_Semanal_{disc}.xlsx")
+            if 'DATA MONT' in df_rep.columns:
+                df_sem = df_rep[df_rep['DATA MONT'] >= inicio_semana][colunas_avanco]
+                # Converte de volta para texto apenas para exibição
+                df_sem['DATA MONT'] = df_sem['DATA MONT'].dt.strftime('%d/%m/%Y')
+                st.dataframe(df_sem, use_container_width=True, hide_index=True)
+                buf_s = BytesIO()
+                df_sem.to_excel(buf_s, index=False)
+                st.download_button("📥 Baixar Avanço", buf_s.getvalue(), f"Avanco_{disc}.xlsx")
 
     # --- ABA 4: CARGA EM MASSA ---
     elif aba == "📤 CARGA EM MASSA":
-        st.subheader(f"Gerenciamento via Excel - {disc}")
-        with st.expander("📥 EXPORTAR MODELO ATUAL", expanded=True):
-            colunas_excel = ['TAG', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
-            df_export = df_atual[[c for c in colunas_excel if c in df_atual.columns]]
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                df_export.to_excel(writer, index=False)
-            st.download_button(label="⬇️ Baixar Planilha (.xlsx)", data=output.getvalue(), file_name=f"Modelo_{disc}.xlsx")
+        st.subheader("Importação e Exportação")
+        with st.expander("📥 EXPORTAR MODELO"):
+            col_mod = ['TAG', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
+            df_exp = df_atual[[c for c in col_mod if c in df_atual.columns]]
+            buffer = BytesIO()
+            with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                df_exp.to_excel(writer, index=False)
+            st.download_button("Baixar Excel", buffer.getvalue(), "modelo.xlsx")
 
-        with st.expander("🚀 IMPORTAR ATUALIZAÇÕES EM MASSA", expanded=True):
-            up = st.file_uploader("Arraste o arquivo aqui", type="xlsx") #
-            if up and st.button("CONFIRMAR IMPORTAÇÃO"):
+        with st.expander("🚀 IMPORTAR"):
+            up = st.file_uploader("Suba o arquivo", type="xlsx")
+            if up and st.button("Confirmar"):
                 df_up = pd.read_excel(up).astype(str).replace('nan', '')
                 for _, r in df_up.iterrows():
                     if r['TAG'] in df_atual['TAG'].values:
@@ -225,7 +224,7 @@ if not df_atual.empty:
                         for col in ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']:
                             if col in cols_map: ws_atual.update_cell(idx, cols_map[col], r.get(col, ''))
                         if 'STATUS' in cols_map: ws_atual.update_cell(idx, cols_map['STATUS'], st_n)
-                st.success("Base atualizada!")
+                st.success("Importado!")
                 st.rerun()
 
 if st.sidebar.button("🚪 SAIR"):
