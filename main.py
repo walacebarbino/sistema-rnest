@@ -51,9 +51,9 @@ def calcular_status(previsto, d_i, d_f, d_m):
     return "AGUARDANDO PROG"
 
 # --- INTERFACE OPERACIONAL ---
-st.set_page_config(page_title="SISTEMA OPERACIONAL RNEST", layout="wide")
+st.set_page_config(page_title="SISTEMA CONTROL E&I", layout="wide")
 
-st.markdown("### 🛠️ GESTÃO OPERACIONAL RNEST")
+st.markdown("### 🛠️ GESTÃO CONTROLE ELETRICA E INSTRUMENTAÇÃO")
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
