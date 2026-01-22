@@ -7,6 +7,11 @@ import json
 import plotly.express as px
 from io import BytesIO
 
+# --- 1. CONFIGURAÇÃO DE ACESSO (IDs DAS PLANILHAS) ---
+# Substitua pelos IDs das suas planilhas (o código na URL entre /d/ e /edit)
+ID_PLANILHA_ELE = "COLE_AQUI_O_ID_DA_PLANILHA_BD_ELE"
+ID_PLANILHA_INST = "COLE_AQUI_O_ID_DA_PLANILHA_BD_INST"
+
 # --- CONEXÃO ---
 @st.cache_resource
 def conectar_google():
@@ -22,132 +27,125 @@ def conectar_google():
 
 client = conectar_google()
 
-def extrair_dados(nome_planilha):
+def extrair_dados(disciplina):
     try:
-        sh = client.open(nome_planilha)
+        id_f = ID_PLANILHA_ELE if disciplina == "ELÉTRICA" else ID_PLANILHA_INST
+        sh = client.open_by_key(id_f) 
         ws = sh.get_worksheet(0)
         data = ws.get_all_values()
         if len(data) > 1:
             df = pd.DataFrame(data[1:], columns=data[0])
+            df.columns = df.columns.str.strip() 
             return df, ws
         return pd.DataFrame(), None
     except Exception as e:
+        st.sidebar.error(f"Erro ao carregar {disciplina}: {e}")
         return pd.DataFrame(), None
 
-# --- REGRAS DE STATUS ---
-def calcular_status(d_i, d_m):
-    d_m = str(d_m).strip()
-    d_i = str(d_i).strip()
-    if d_m and d_m.lower() not in ["nan", "none", "-", "0"]: return "MONTADO"
-    if d_i and d_i.lower() not in ["nan", "none", "-", "0"]: return "AGUARDANDO MONT"
-    return "AGUARDANDO PROG"
+# --- REGRAS DE STATUS AUTOMÁTICO ---
+def calcular_status(previsto, inicio_prog, fim_prog, montagem):
+    def limpo(v): return str(v).strip().lower() not in ["", "nan", "none", "-", "0"]
+    
+    if limpo(montagem): return "MONTADO"
+    if limpo(inicio_prog) or limpo(fim_prog): return "EM ANDAMENTO / PROG"
+    if limpo(previsto): return "PREVISTO"
+    return "AGUARDANDO"
 
 # --- INTERFACE OPERACIONAL ---
 st.set_page_config(page_title="SISTEMA OPERACIONAL RNEST", layout="wide")
-
-# Barra Superior com Avanço Geral
 st.markdown("### 🛠️ GESTÃO OPERACIONAL RNEST")
-df_ele, ws_ele = extrair_dados("BD_ELE")
-df_ins, ws_ins = extrair_dados("BD_INST")
 
-col_m1, col_m2 = st.columns(2)
-with col_m1:
-    if not df_ele.empty:
-        p = (len(df_ele[df_ele['STATUS']=='MONTADO'])/len(df_ele))*100
-        st.write(f"**⚡ ELÉTRICA:** {p:.1f}%")
-        st.progress(p/100)
-with col_m2:
-    if not df_ins.empty:
-        p = (len(df_ins[df_ins['STATUS']=='MONTADO'])/len(df_ins))*100
-        st.write(f"**🔬 INSTRUMENTAÇÃO:** {p:.1f}%")
-        st.progress(p/100)
+df_ele, ws_ele = extrair_dados("ELÉTRICA")
+df_ins, ws_ins = extrair_dados("INSTRUMENTAÇÃO")
+
+# Dashboard Superior
+c1, c2 = st.columns(2)
+for col, df, label in zip([c1, c2], [df_ele, df_ins], ["⚡ ELÉTRICA", "🔬 INSTRUMENTAÇÃO"]):
+    if not df.empty:
+        total = len(df)
+        concluidos = len(df[df['STATUS'].str.strip().str.upper() == 'MONTADO'])
+        perc = (concluidos/total)*100 if total > 0 else 0
+        col.write(f"**{label}:** {perc:.1f}% ({concluidos}/{total})")
+        col.progress(perc/100)
 
 st.divider()
 
 # Menu Lateral
 disc = st.sidebar.selectbox("TRABALHAR COM:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
-aba = st.sidebar.radio("AÇÃO:", ["📝 EDIÇÃO POR TAG", "📊 QUADRO GERAL / CURVA S", "📤 CARGA EM MASSA"])
+aba = st.sidebar.radio("AÇÃO:", ["📝 EDIÇÃO POR TAG", "📊 QUADRO GERAL", "📤 CARGA EM MASSA"])
 
 df_atual = df_ele if disc == "ELÉTRICA" else df_ins
 ws_atual = ws_ele if disc == "ELÉTRICA" else ws_ins
 
-if df_atual.empty:
-    st.warning(f"⚠️ Atenção: Não foi possível carregar os dados de {disc}. Verifique se a planilha 'BD_ELE' ou 'BD_INST' foi compartilhada com o e-mail da conta de serviço.")
-else:
+if not df_atual.empty:
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
 
-    # --- ABA 1: EDIÇÃO INDIVIDUAL (OPERACIONAL) ---
     if aba == "📝 EDIÇÃO POR TAG":
-        st.subheader(f"🛠️ Editar TAG de {disc}")
+        st.subheader(f"🛠️ Painel de Edição Individual - {disc}")
         
-        # Busca a lista de TAGs para o usuário escolher
         lista_tags = sorted(df_atual['TAG'].unique())
         tag_sel = st.selectbox("Selecione o TAG para editar:", lista_tags)
         
-        # Localiza os dados atuais do TAG
         idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
         dados_tag = df_atual.iloc[idx_base]
         
         with st.form("form_operacional"):
             st.markdown(f"**Editando: {tag_sel}**")
-            c1, c2, c3 = st.columns(3)
             
-            nova_data_prog = c1.text_input("Data Início Prog (DD/MM/AAAA)", value=dados_tag.get('DATA INIC PROG', ''))
-            nova_data_mont = c2.text_input("Data Montagem (DD/MM/AAAA)", value=dados_tag.get('DATA MONT', ''))
-            obs = c3.text_input("Observação (Opcional)", value=dados_tag.get('OBS', ''))
+            # Primeira linha: Datas de Planejamento e Execução
+            r1c1, r1c2, r1c3, r1c4 = st.columns(4)
+            d_prev = r1c1.text_input("Data Previsto", value=dados_tag.get('PREVISTO', ''))
+            d_ini = r1c2.text_input("Data Início Prog", value=dados_tag.get('DATA INIC PROG', ''))
+            d_fim = r1c3.text_input("Data Fim Prog", value=dados_tag.get('DATA FIM PROG', ''))
+            d_mont = r1c4.text_input("Data Montagem", value=dados_tag.get('DATA MONT', ''))
+            
+            # Segunda linha: Observações
+            n_obs = st.text_input("Observações (Opcional)", value=dados_tag.get('OBS', ''))
+            
+            # Cálculo de Status em tempo real para visualização
+            status_previsto = calcular_status(d_prev, d_ini, d_fim, d_mont)
+            st.info(f"**Status Resultante:** {status_previsto}")
             
             if st.form_submit_button("💾 GRAVAR ALTERAÇÕES NA PLANILHA"):
-                novo_status = calcular_status(nova_data_prog, nova_data_mont)
-                
-                # Linha no Google Sheets é index + 2 (1 do cabeçalho + 1 porque começa em 1)
                 linha_sheets = idx_base + 2
-                
                 try:
-                    # Grava diretamente no Google Sheets
-                    if 'DATA INIC PROG' in cols_map: ws_atual.update_cell(linha_sheets, cols_map['DATA INIC PROG'], nova_data_prog)
-                    if 'DATA MONT' in cols_map: ws_atual.update_cell(linha_sheets, cols_map['DATA MONT'], nova_data_mont)
-                    if 'STATUS' in cols_map: ws_atual.update_cell(linha_sheets, cols_map['STATUS'], novo_status)
+                    # Gravação em lote para as colunas solicitadas
+                    if 'PREVISTO' in cols_map: ws_atual.update_cell(linha_sheets, cols_map['PREVISTO'], d_prev)
+                    if 'DATA INIC PROG' in cols_map: ws_atual.update_cell(linha_sheets, cols_map['DATA INIC PROG'], d_ini)
+                    if 'DATA FIM PROG' in cols_map: ws_atual.update_cell(linha_sheets, cols_map['DATA FIM PROG'], d_fim)
+                    if 'DATA MONT' in cols_map: ws_atual.update_cell(linha_sheets, cols_map['DATA MONT'], d_mont)
+                    if 'STATUS' in cols_map: ws_atual.update_cell(linha_sheets, cols_map['STATUS'], status_previsto)
+                    if 'OBS' in cols_map: ws_atual.update_cell(linha_sheets, cols_map['OBS'], n_obs)
                     
-                    st.success(f"✅ TAG {tag_sel} atualizado com sucesso! Status: {novo_status}")
-                    st.rerun() # Recarrega para mostrar o dado novo
+                    st.success(f"✅ TAG {tag_sel} atualizado com sucesso!")
+                    st.rerun() 
                 except Exception as e:
                     st.error(f"Erro ao gravar: {e}")
 
-    # --- ABA 2: QUADRO GERAL E CURVA S ---
-    elif aba == "📊 QUADRO GERAL / CURVA S":
-        st.subheader(f"Visualização de {disc}")
-        tab1, tab2 = st.tabs(["📋 Tabela de Dados", "📈 Curva S"])
-        
-        with tab1:
-            st.dataframe(df_atual, use_container_width=True)
-            
-        with tab2:
-            if 'DATA MONT' in df_atual.columns:
-                df_c = df_atual.copy()
-                df_c['DATA MONT'] = pd.to_datetime(df_c['DATA MONT'], errors='coerce')
-                df_c = df_c.dropna(subset=['DATA MONT']).sort_values('DATA MONT')
-                if not df_c.empty:
-                    df_c['Realizado'] = range(1, len(df_c) + 1)
-                    fig = px.line(df_c, x='DATA MONT', y='Realizado', markers=True, title="Avanço Acumulado")
-                    st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.info("A curva S aparecerá conforme as datas de montagem forem preenchidas.")
+    elif aba == "📊 QUADRO GERAL":
+        st.subheader(f"Base de Dados Completa - {disc}")
+        st.dataframe(df_atual, use_container_width=True)
 
-    # --- ABA 3: CARGA EM MASSA ---
     elif aba == "📤 CARGA EM MASSA":
-        st.subheader("Importar Atualizações via Excel")
+        st.subheader("Carga via Excel")
         buffer = BytesIO()
-        pd.DataFrame(columns=['TAG', 'DATA INIC PROG', 'DATA MONT']).to_excel(buffer, index=False)
+        pd.DataFrame(columns=['TAG', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']).to_excel(buffer, index=False)
         st.download_button("📥 Baixar Modelo", buffer.getvalue(), "modelo_rnest.xlsx")
         
-        up = st.file_uploader("Subir planilha preenchida", type="xlsx")
-        if up and st.button("🚀 Processar Arquivo"):
+        up = st.file_uploader("Subir arquivo Excel", type="xlsx")
+        if up and st.button("🚀 Processar"):
             df_up = pd.read_excel(up).astype(str).replace('nan', '')
             for _, r in df_up.iterrows():
-                if r['TAG'] in df_atual['TAG'].values:
-                    i = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
-                    status = calcular_status(r['DATA INIC PROG'], r['DATA MONT'])
-                    ws_atual.update_cell(i, cols_map['DATA MONT'], r['DATA MONT'])
-                    ws_atual.update_cell(i, cols_map['STATUS'], status)
-            st.success("Planilha processada e Sheets atualizado!")
+                t = r['TAG'].strip()
+                if t in df_atual['TAG'].values:
+                    i = df_atual.index[df_atual['TAG'] == t][0] + 2
+                    st_n = calcular_status(r.get('PREVISTO'), r.get('DATA INIC PROG'), r.get('DATA FIM PROG'), r.get('DATA MONT'))
+                    # Atualiza colunas essenciais
+                    for col in ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']:
+                        if col in cols_map:
+                            val = st_n if col == 'STATUS' else r.get(col, '')
+                            ws_atual.update_cell(i, cols_map[col], val)
+            st.success("Sincronização concluída!")
             st.rerun()
+else:
+    st.warning("⚠️ Planilha vazia ou não encontrada. Verifique os IDs e as permissões.")
