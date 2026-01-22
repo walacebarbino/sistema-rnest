@@ -9,7 +9,7 @@ from io import BytesIO
 from datetime import datetime, timedelta
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="SISTEMA ICE CONTROL", layout="wide")
+st.set_page_config(page_title="SISTEMA G-MONT", layout="wide")
 
 # --- CONTROLE DE ACESSO ---
 if 'logado' not in st.session_state:
@@ -74,7 +74,7 @@ df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
 # --- INTERFACE ---
-st.sidebar.image("LOGO2.jpeg", width=120)
+st.sidebar.image("LOGO2.png", width=120)
 st.sidebar.divider()
 disc = st.sidebar.selectbox("TRABALHAR COM:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
 aba = st.sidebar.radio("AÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 CARGA EM MASSA"])
