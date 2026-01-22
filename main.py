@@ -67,6 +67,15 @@ with col_m2:
 
 st.divider()
 
+# --- LOGO ICE CONTROL ---
+try:
+    # Usa o nome exato do arquivo que você subiu: LOGO2.jpeg
+    st.sidebar.image("LOGO2.jpeg", width=120)
+except:
+    st.sidebar.subheader("ICE CONTROL")
+
+st.sidebar.divider()
+
 disc = st.sidebar.selectbox("TRABALHAR COM:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
 aba = st.sidebar.radio("AÇÃO:", ["📝 EDIÇÃO POR TAG", "📊 QUADRO GERAL / CURVA S", "📤 CARGA EM MASSA"])
 
