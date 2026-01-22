@@ -46,11 +46,33 @@ def calcular_status(previsto, d_i, d_f, d_m):
 # --- INTERFACE OPERACIONAL ---
 st.set_page_config(page_title="SISTEMA ICE CONTROL", layout="wide")
 
+# --- LOGO NA SIDEBAR ---
+try:
+    st.sidebar.image("LOGO2.jpeg", width=120)
+except:
+    st.sidebar.subheader("ICE CONTROL")
+
+st.sidebar.divider()
+
+# --- SISTEMA DE ACESSO (PIN DE 4 DÍGITOS) ---
+st.sidebar.subheader("🔐 ACESSO RESTRITO")
+senha_correta = "1234"  # <--- ALTERE AQUI SUA SENHA DE 4 DÍGITOS
+pin_usuario = st.sidebar.text_input("Digite o PIN de acesso:", type="password", max_chars=4)
+
+if pin_usuario != senha_correta:
+    st.sidebar.warning("Aguardando PIN...")
+    st.markdown("## 🔒 SISTEMA BLOQUEADO")
+    st.info("Por favor, insira o código de acesso na barra lateral para utilizar o sistema.")
+    st.stop() 
+
+# --- SE O PIN ESTIVER CORRETO, O RESTANTE DO CÓDIGO APARECE ---
+st.sidebar.success("Acesso Liberado")
+
 st.markdown("### 🛠️ GESTÃO MONTAGEM ELE-INST")
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
-# Barra Superior
+# Barra Superior de Progresso
 col_m1, col_m2 = st.columns(2)
 with col_m1:
     if not df_ele.empty:
@@ -65,35 +87,24 @@ with col_m2:
 
 st.divider()
 
-# --- LOGO ICE CONTROL ---
-try:
-    st.sidebar.image("LOGO2.jpeg", width=120)
-except:
-    st.sidebar.subheader("ICE CONTROL")
-
-st.sidebar.divider()
-
 disc = st.sidebar.selectbox("TRABALHAR COM:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
 aba = st.sidebar.radio("AÇÃO:", ["📝 EDIÇÃO POR TAG", "📊 QUADRO GERAL / CURVA S", "📤 CARGA EM MASSA"])
 
 df_atual = df_ele if disc == "ELÉTRICA" else df_ins
 ws_atual = ws_ele if disc == "ELÉTRICA" else ws_ins
 
-if df_atual.empty:
-    st.warning(f"⚠️ Atenção: Não foi possível carregar os dados de {disc}.")
-else:
+if not df_atual.empty:
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
 
     # --- ABA 1: EDIÇÃO POR TAG ---
     if aba == "📝 EDIÇÃO POR TAG":
         st.subheader(f"🛠️ Editar TAG de {disc}")
         lista_tags = sorted(df_atual['TAG'].unique())
-        tag_sel = st.selectbox("Selecione o TAG para editar:", lista_tags)
+        tag_sel = st.selectbox("Selecione o TAG:", lista_tags)
         idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
         dados_tag = df_atual.iloc[idx_base]
         
         with st.form("form_operacional"):
-            st.markdown(f"**Editando: {tag_sel}**")
             c1, c2, c3, c4, c5 = st.columns(5)
             v_prev = c1.text_input("Previsto", value=dados_tag.get('PREVISTO', ''))
             v_ini = c2.text_input("Data Iníc Prog", value=dados_tag.get('DATA INIC PROG', ''))
@@ -102,7 +113,7 @@ else:
             
             status_sugerido = calcular_status(v_prev, v_ini, v_fim, v_mont)
             v_status = c5.text_input("Status", value=status_sugerido, disabled=True)
-            obs = st.text_input("Observação (Opcional)", value=dados_tag.get('OBS', ''))
+            obs = st.text_input("Observação", value=dados_tag.get('OBS', ''))
             
             if st.form_submit_button("💾 GRAVAR ALTERAÇÕES NA PLANILHA"):
                 linha_sheets = idx_base + 2
@@ -122,7 +133,6 @@ else:
     elif aba == "📊 QUADRO GERAL / CURVA S":
         st.subheader(f"📊 Curva S e Quadro Geral - {disc}")
         
-        # Lógica da Curva S
         df_c = df_atual.copy()
         for col in ['PREVISTO', 'DATA FIM PROG', 'DATA MONT']:
             df_c[col] = pd.to_datetime(df_c[col], dayfirst=True, errors='coerce')
@@ -132,13 +142,11 @@ else:
         if not datas_alvo.empty:
             eixo_x = pd.date_range(start=datas_alvo.min(), end=datas_alvo.max(), freq='D')
             df_curva = pd.DataFrame(index=eixo_x)
-            
             df_curva['PREVISTO'] = [len(df_c[df_c['PREVISTO'] <= d]) for d in eixo_x]
             df_curva['PROGRAMADO'] = [len(df_c[df_c['DATA FIM PROG'] <= d]) for d in eixo_x]
-            df_curva['AVANÇO (REAL)'] = [len(df_c[df_c['DATA MONT'] <= d]) for d in eixo_x]
+            df_curva['REALIZADO'] = [len(df_c[df_c['DATA MONT'] <= d]) for d in eixo_x]
             
-            fig = px.line(df_curva, labels={'index': 'Data', 'value': 'Quantidade TAGs'},
-                         title=f"Evolução Acumulada - {disc}")
+            fig = px.line(df_curva, labels={'index': 'Data', 'value': 'Quantidade TAGs'}, title=f"Evolução Acumulada - {disc}")
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("💡 Insira datas nas planilhas para gerar a Curva S.")
@@ -155,7 +163,7 @@ else:
             df_export = df_atual[[c for c in colunas_modelo if c in df_atual.columns]] if not df_atual.empty else pd.DataFrame(columns=colunas_modelo)
             buffer = BytesIO()
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                df_export.to_excel(writer, index=False, sheet_name='Planilha_RNEST')
+                df_export.to_excel(writer, index=False)
             st.download_button(label="📥 Baixar Planilha Excel (.xlsx)", data=buffer.getvalue(),
                              file_name=f"Modelo_ICE_CONTROL_{disc}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
