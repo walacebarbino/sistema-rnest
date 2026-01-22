@@ -28,7 +28,7 @@ def tela_login():
         
         # O sistema loga ao apertar o botão ou dar Enter
         if st.button("ENTRAR NO SISTEMA"):
-            if pin == "1234": # <--- SUA SENHA AQUI
+            if pin == "2026": # <--- SUA SENHA AQUI
                 st.session_state['logado'] = True
                 st.rerun()
             else:
