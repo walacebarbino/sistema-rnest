@@ -34,30 +34,25 @@ def extrair_dados(nome_planilha):
     except Exception as e:
         return pd.DataFrame(), None
 
-# --- NOVA REGRA DE STATUS (SOLICITADA) ---
+# --- REGRA DE STATUS AUTOMÁTICO ---
 def calcular_status(previsto, d_i, d_f, d_m):
-    d_m = str(d_m).strip().lower()
-    d_f = str(d_f).strip().lower()
-    d_i = str(d_i).strip().lower()
-    prev = str(previsto).strip().lower()
+    # Função para verificar se campo está preenchido
+    def tem(v): return str(v).strip().lower() not in ["nan", "none", "-", "0", ""]
     
-    # Lista de valores considerados vazios
-    vazios = ["nan", "none", "-", "0", ""]
-    
-    if d_m not in vazios: return "MONTADO"
-    if d_f not in vazios: return "PROG. FINALIZADA"
-    if d_i not in vazios: return "EM ANDAMENTO"
-    if prev not in vazios: return "PREVISTO"
+    if tem(d_m): return "MONTADO"
+    if tem(d_f): return "PROG. FINALIZADA"
+    if tem(d_i): return "EM ANDAMENTO"
+    if tem(previsto): return "PREVISTO"
     return "AGUARDANDO PROG"
 
 # --- INTERFACE OPERACIONAL ---
-st.set_page_config(page_title="SISTEMA CONTROL E&I", layout="wide")
+st.set_page_config(page_title="SISTEMA ICE CONTROL", layout="wide")
 
-st.markdown("### 🛠️ GESTÃO CONTROLE ELETRICA E INSTRUMENTAÇÃO")
+st.markdown("### 🛠️ GESTÃO MONTAGEM ELE-INT")
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
-# Barra de Progresso Superior
+# Barra Superior
 col_m1, col_m2 = st.columns(2)
 with col_m1:
     if not df_ele.empty:
@@ -93,31 +88,34 @@ else:
         
         with st.form("form_operacional"):
             st.markdown(f"**Editando: {tag_sel}**")
-            c1, c2, c3, c4 = st.columns(4)
             
-            # As caixas que você pediu:
+            # Linha 1: Datas e Status solicitado
+            c1, c2, c3, c4, c5 = st.columns(5)
             v_prev = c1.text_input("Previsto", value=dados_tag.get('PREVISTO', ''))
             v_ini = c2.text_input("Data Iníc Prog", value=dados_tag.get('DATA INIC PROG', ''))
             v_fim = c3.text_input("Data Fim Prog", value=dados_tag.get('DATA FIM PROG', ''))
             v_mont = c4.text_input("Data Montagem", value=dados_tag.get('DATA MONT', ''))
             
-            obs = st.text_input("Observação", value=dados_tag.get('OBS', ''))
+            # Cálculo automático do status para a caixa de visualização
+            status_sugerido = calcular_status(v_prev, v_ini, v_fim, v_mont)
+            v_status = c5.text_input("Status", value=status_sugerido, disabled=True)
+            
+            # Linha 2: Observação
+            obs = st.text_input("Observação (Opcional)", value=dados_tag.get('OBS', ''))
             
             if st.form_submit_button("💾 GRAVAR ALTERAÇÕES NA PLANILHA"):
-                # O status muda automaticamente de acordo com as datas
-                novo_status = calcular_status(v_prev, v_ini, v_fim, v_mont)
                 linha_sheets = idx_base + 2
                 
                 try:
-                    # Atualiza cada célula conforme o mapa de colunas
+                    # Grava todas as informações nas colunas correspondentes
                     if 'PREVISTO' in cols_map: ws_atual.update_cell(linha_sheets, cols_map['PREVISTO'], v_prev)
                     if 'DATA INIC PROG' in cols_map: ws_atual.update_cell(linha_sheets, cols_map['DATA INIC PROG'], v_ini)
                     if 'DATA FIM PROG' in cols_map: ws_atual.update_cell(linha_sheets, cols_map['DATA FIM PROG'], v_fim)
                     if 'DATA MONT' in cols_map: ws_atual.update_cell(linha_sheets, cols_map['DATA MONT'], v_mont)
-                    if 'STATUS' in cols_map: ws_atual.update_cell(linha_sheets, cols_map['STATUS'], novo_status)
+                    if 'STATUS' in cols_map: ws_atual.update_cell(linha_sheets, cols_map['STATUS'], status_sugerido)
                     if 'OBS' in cols_map: ws_atual.update_cell(linha_sheets, cols_map['OBS'], obs)
                     
-                    st.success(f"✅ {tag_sel} Gravado! Status: {novo_status}")
+                    st.success(f"✅ TAG {tag_sel} atualizado com Status: {status_sugerido}")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao gravar: {e}")
@@ -127,14 +125,14 @@ else:
         st.dataframe(df_atual, use_container_width=True)
 
     elif aba == "📤 CARGA EM MASSA":
-        st.subheader("Carga via Excel")
-        up = st.file_uploader("Subir planilha", type="xlsx")
-        if up and st.button("🚀 Processar"):
+        st.subheader("Importar Atualizações via Excel")
+        up = st.file_uploader("Subir planilha preenchida", type="xlsx")
+        if up and st.button("🚀 Processar Arquivo"):
             df_up = pd.read_excel(up).astype(str).replace('nan', '')
             for _, r in df_up.iterrows():
                 if r['TAG'] in df_atual['TAG'].values:
                     i = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
-                    st_n = calcular_status(r.get('PREVISTO'), r.get('DATA INIC PROG'), r.get('DATA FIM PROG'), r.get('DATA MONT'))
-                    ws_atual.update_cell(i, cols_map['STATUS'], st_n)
-            st.success("Concluído!")
+                    status_n = calcular_status(r.get('PREVISTO'), r.get('DATA INIC PROG'), r.get('DATA FIM PROG'), r.get('DATA MONT'))
+                    if 'STATUS' in cols_map: ws_atual.update_cell(i, cols_map['STATUS'], status_n)
+            st.success("Planilha processada!")
             st.rerun()
