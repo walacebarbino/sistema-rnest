@@ -60,8 +60,9 @@ def extrair_dados(nome_planilha):
         return pd.DataFrame(), None
     except: return pd.DataFrame(), None
 
+# --- LÓGICA DE STATUS AUTOMÁTICA ---
 def calcular_status(previsto, d_i, d_f, d_m):
-    def tem(v): return str(v).strip().lower() not in ["nan", "none", "-", "0", "", "none"]
+    def tem(v): return str(v).strip().lower() not in ["nan", "none", "-", "0", "", "none", "nat"]
     if tem(d_m): return "MONTADO"
     if tem(d_f): return "PROG. FINALIZADA"
     if tem(d_i): return "EM ANDAMENTO"
@@ -72,7 +73,7 @@ def calcular_status(previsto, d_i, d_f, d_m):
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
-# --- INTERFACE LATERAL CENTRALIZADA ---
+# --- INTERFACE LATERAL ---
 col_side1, col_side2, col_side3 = st.sidebar.columns([1, 3, 1])
 with col_side2:
     st.image("LOGO2.png", width=120)
@@ -90,7 +91,6 @@ st.divider()
 if not df_atual.empty:
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
 
-    # --- ABA 1: EDIÇÃO (AGORA COM CALENDÁRIO) ---
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"🛠️ Edição por TAG - {disc}")
         lista_tags = sorted(df_atual['TAG'].unique())
@@ -98,45 +98,45 @@ if not df_atual.empty:
         idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
         dados_tag = df_atual.iloc[idx_base]
         
-        # Função para converter texto da planilha em objeto de data para o Streamlit
         def converter_para_data(texto):
             try: return datetime.strptime(texto, "%d/%m/%Y").date()
             except: return None
 
         with st.form("form_edit"):
             c1, c2, c3, c4 = st.columns(4)
-            
-            # Campos de Data com Calendário
             v_prev = c1.date_input("Previsto", value=converter_para_data(dados_tag.get('PREVISTO')), format="DD/MM/YYYY")
             v_ini = c2.date_input("Início Prog", value=converter_para_data(dados_tag.get('DATA INIC PROG')), format="DD/MM/YYYY")
             v_fim = c3.date_input("Fim Prog", value=converter_para_data(dados_tag.get('DATA FIM PROG')), format="DD/MM/YYYY")
             v_mont = c4.date_input("Data Montagem", value=converter_para_data(dados_tag.get('DATA MONT')), format="DD/MM/YYYY")
             
-            obs = st.text_input("Observação", value=dados_tag.get('OBS', ''))
+            # Cálculo automático em tempo real (apenas informativo)
+            st.markdown("---")
+            v_obs = st.text_input("Observação:", value=dados_tag.get('OBS', ''))
+            st.info(f"**Status Atual na Planilha:** {dados_tag.get('STATUS', 'N/A')}")
             
             if st.form_submit_button("💾 SALVAR ALTERAÇÃO"):
-                # Converte as datas de volta para texto no formato brasileiro para salvar na planilha
                 f_prev = v_prev.strftime("%d/%m/%Y") if v_prev else ""
                 f_ini = v_ini.strftime("%d/%m/%Y") if v_ini else ""
                 f_fim = v_fim.strftime("%d/%m/%Y") if v_fim else ""
                 f_mont = v_mont.strftime("%d/%m/%Y") if v_mont else ""
                 
-                st_sug = calcular_status(f_prev, f_ini, f_fim, f_mont)
-                linha = idx_base + 2
+                # O SISTEMA CALCULA SOZINHO AQUI:
+                novo_status = calcular_status(f_prev, f_ini, f_fim, f_mont)
                 
+                linha = idx_base + 2
                 campos = {
                     'PREVISTO': f_prev, 
                     'DATA INIC PROG': f_ini, 
                     'DATA FIM PROG': f_fim, 
                     'DATA MONT': f_mont, 
-                    'STATUS': st_sug, 
-                    'OBS': obs
+                    'STATUS': novo_status, 
+                    'OBS': v_obs
                 }
                 
                 for col, val in campos.items():
                     if col in cols_map: ws_atual.update_cell(linha, cols_map[col], val)
                 
-                st.success("Dados salvos com sucesso!")
+                st.success(f"Dados salvos! Novo Status: {novo_status}")
                 st.rerun()
         
         st.divider()
@@ -166,8 +166,7 @@ if not df_atual.empty:
                 st.write(f"**⚡ ELÉTRICA: {p_ele:.1f}%**")
                 st.progress(p_ele/100)
                 df_res_ele = gerar_curva_data(df_ele)
-                if df_res_ele is not None: 
-                    st.plotly_chart(px.line(df_res_ele, title="Curva S - ELÉTRICA"), use_container_width=True)
+                if df_res_ele is not None: st.plotly_chart(px.line(df_res_ele, title="Curva S - ELÉTRICA"), use_container_width=True)
 
         with col_g2:
             if not df_ins.empty:
@@ -175,46 +174,38 @@ if not df_atual.empty:
                 st.write(f"**🔬 INSTRUMENTAÇÃO: {p_ins:.1f}%**")
                 st.progress(p_ins/100)
                 df_res_ins = gerar_curva_data(df_ins)
-                if df_res_ins is not None: 
-                    st.plotly_chart(px.line(df_res_ins, title="Curva S - INSTRUMENTAÇÃO"), use_container_width=True)
+                if df_res_ins is not None: st.plotly_chart(px.line(df_res_ins, title="Curva S - INSTRUMENTAÇÃO"), use_container_width=True)
 
     # --- ABA 3: RELATÓRIOS ---
     elif aba == "📋 RELATÓRIOS":
         st.subheader(f"📊 Relatórios Detalhados - {disc}")
         df_rep = df_atual.copy()
-        # Tratamento de erro para colunas ausentes na visualização
-        colunas_necessarias = ['TAG', 'STATUS', 'DATA MONT', 'OBS']
-        for col in colunas_necessarias:
-            if col not in df_rep.columns: df_rep[col] = ""
-
         if 'DATA MONT' in df_rep.columns:
             df_rep['DATA MONT'] = pd.to_datetime(df_rep['DATA MONT'], dayfirst=True, errors='coerce')
-        
         hoje = datetime.now()
         inicio_semana = hoje - timedelta(days=7)
-        
         total_tags = len(df_rep)
-        montados = len(df_rep[df_rep['STATUS'] == 'MONTADO'])
+        montados = len(df_rep[df_rep['STATUS'] == 'MONTADO']) if 'STATUS' in df_rep.columns else 0
         pendentes = total_tags - montados
-        avanco_semanal = len(df_rep[df_rep['DATA MONT'] >= inicio_semana])
-        
+        avanco_semanal = len(df_rep[df_rep['DATA MONT'] >= inicio_semana]) if 'DATA MONT' in df_rep.columns else 0
         c_r1, c_r2, c_r3, c_r4 = st.columns(4)
         c_r1.metric("Total de TAGs", total_tags)
         c_r2.metric("Total Montado", montados)
         c_r3.metric("Pendências", pendentes)
         c_r4.metric("Avanço 7 Dias", avanco_semanal)
-        
         st.divider()
         col_r_left, col_r_right = st.columns(2)
         with col_r_left:
             st.markdown("#### 🚩 Lista de Pendências")
-            df_pend = df_rep[df_rep['STATUS'] != 'MONTADO']
-            st.dataframe(df_pend[['TAG', 'STATUS', 'OBS']], use_container_width=True, hide_index=True)
+            if 'STATUS' in df_rep.columns:
+                df_pend = df_rep[df_rep['STATUS'] != 'MONTADO']
+                st.dataframe(df_pend[['TAG', 'STATUS', 'OBS']], use_container_width=True, hide_index=True)
         with col_r_right:
             st.markdown("#### 📈 Avanço da Semana")
-            df_sem = df_rep[df_rep['DATA MONT'] >= inicio_semana].copy()
-            df_sem['DATA MONT'] = df_sem['DATA MONT'].dt.strftime('%d/%m/%Y')
-            st.dataframe(df_sem[['TAG', 'DATA MONT', 'OBS']], use_container_width=True, hide_index=True)
+            if 'DATA MONT' in df_rep.columns:
+                df_sem = df_rep[df_rep['DATA MONT'] >= inicio_semana].copy()
+                df_sem['DATA MONT'] = df_sem['DATA MONT'].dt.strftime('%d/%m/%Y')
+                st.dataframe(df_sem[['TAG', 'DATA MONT', 'OBS']], use_container_width=True, hide_index=True)
 
     # --- ABA 4: CARGA EM MASSA ---
     elif aba == "📤 CARGA EM MASSA":
@@ -228,14 +219,12 @@ if not df_atual.empty:
             with pd.ExcelWriter(buffer_mod, engine='xlsxwriter') as writer:
                 df_mod.to_excel(writer, index=False)
             st.download_button("📥 Baixar Modelo", buffer_mod.getvalue(), f"modelo_{disc}.xlsx", use_container_width=True)
-
         with c_exp2:
             st.success("📂 **PLANILHA COMPLETA**")
             buffer_full = BytesIO()
             with pd.ExcelWriter(buffer_full, engine='xlsxwriter') as writer:
                 df_atual.to_excel(writer, index=False)
             st.download_button("📥 EXPORTAR TODA A PLANILHA", buffer_full.getvalue(), f"DB_COMPLETO_{disc}.xlsx", use_container_width=True)
-
         st.divider()
         st.subheader("🚀 Importar Atualização")
         up = st.file_uploader("Selecione o arquivo Excel atualizado:", type="xlsx")
