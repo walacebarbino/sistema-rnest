@@ -60,13 +60,14 @@ def extrair_dados(nome_planilha):
         return pd.DataFrame(), None
     except: return pd.DataFrame(), None
 
-# --- LÓGICA DE STATUS AUTOMÁTICA ---
-def calcular_status(previsto, d_i, d_f, d_m):
-    def tem(v): return str(v).strip().lower() not in ["nan", "none", "-", "0", "", "none", "nat"]
-    if tem(d_m): return "MONTADO"
-    if tem(d_f): return "PROG. FINALIZADA"
-    if tem(d_i): return "EM ANDAMENTO"
-    if tem(previsto): return "PREVISTO"
+# --- NOVA LÓGICA DE STATUS SOLICITADA ---
+def calcular_status_tag(d_i, d_f, d_m):
+    def tem(v): return str(v).strip().lower() not in ["nan", "none", "-", "0", "", "none", "nat", "null"]
+    
+    if tem(d_m): 
+        return "MONTADO"
+    if tem(d_i) or tem(d_f): 
+        return "PROGRAMADO"
     return "AGUARDANDO PROG"
 
 # --- CARREGAMENTO DE DADOS ---
@@ -103,29 +104,30 @@ if not df_atual.empty:
             except: return None
 
         with st.form("form_edit"):
-            c1, c2, c3, c4 = st.columns(4)
-            v_prev = c1.date_input("Previsto", value=converter_para_data(dados_tag.get('PREVISTO')), format="DD/MM/YYYY")
-            v_ini = c2.date_input("Início Prog", value=converter_para_data(dados_tag.get('DATA INIC PROG')), format="DD/MM/YYYY")
-            v_fim = c3.date_input("Fim Prog", value=converter_para_data(dados_tag.get('DATA FIM PROG')), format="DD/MM/YYYY")
-            v_mont = c4.date_input("Data Montagem", value=converter_para_data(dados_tag.get('DATA MONT')), format="DD/MM/YYYY")
+            st.markdown(f"#### Editando TAG: **{tag_sel}**")
+            c1, c2, c3 = st.columns(3)
             
-            # Cálculo automático em tempo real (apenas informativo)
-            st.markdown("---")
+            # Calendários para seleção
+            v_ini = c1.date_input("Data Início Prog", value=converter_para_data(dados_tag.get('DATA INIC PROG')), format="DD/MM/YYYY")
+            v_fim = c2.date_input("Data Fim Prog", value=converter_para_data(dados_tag.get('DATA FIM PROG')), format="DD/MM/YYYY")
+            v_mont = c3.date_input("Data Montagem", value=converter_para_data(dados_tag.get('DATA MONT')), format="DD/MM/YYYY")
+            
             v_obs = st.text_input("Observação:", value=dados_tag.get('OBS', ''))
-            st.info(f"**Status Atual na Planilha:** {dados_tag.get('STATUS', 'N/A')}")
+            
+            # Mostra o status que será gravado
+            status_calculado = calcular_status_tag(v_ini, v_fim, v_mont)
+            st.info(f"**STATUS DA TAG:** {status_calculado}")
             
             if st.form_submit_button("💾 SALVAR ALTERAÇÃO"):
-                f_prev = v_prev.strftime("%d/%m/%Y") if v_prev else ""
                 f_ini = v_ini.strftime("%d/%m/%Y") if v_ini else ""
                 f_fim = v_fim.strftime("%d/%m/%Y") if v_fim else ""
                 f_mont = v_mont.strftime("%d/%m/%Y") if v_mont else ""
                 
-                # O SISTEMA CALCULA SOZINHO AQUI:
-                novo_status = calcular_status(f_prev, f_ini, f_fim, f_mont)
+                # Aplica a lógica simplificada
+                novo_status = calcular_status_tag(f_ini, f_fim, f_mont)
                 
                 linha = idx_base + 2
                 campos = {
-                    'PREVISTO': f_prev, 
                     'DATA INIC PROG': f_ini, 
                     'DATA FIM PROG': f_fim, 
                     'DATA MONT': f_mont, 
@@ -136,25 +138,26 @@ if not df_atual.empty:
                 for col, val in campos.items():
                     if col in cols_map: ws_atual.update_cell(linha, cols_map[col], val)
                 
-                st.success(f"Dados salvos! Novo Status: {novo_status}")
+                st.success(f"TAG {tag_sel} atualizada como {novo_status}!")
                 st.rerun()
         
         st.divider()
-        st.dataframe(df_atual, use_container_width=True)
+        st.markdown("### 📋 Quadro Geral")
+        st.dataframe(df_atual, use_container_width=True, hide_index=True)
 
     # --- ABA 2: CURVA S ---
     elif aba == "📊 CURVA S":
         def gerar_curva_data(df):
             if df.empty: return None
             df_c = df.copy()
-            for c in ['PREVISTO', 'DATA FIM PROG', 'DATA MONT']:
+            for c in ['DATA FIM PROG', 'DATA MONT']:
                 if c in df_c.columns:
                     df_c[c] = pd.to_datetime(df_c[c], dayfirst=True, errors='coerce')
-            datas = pd.concat([df_c[c] for c in ['PREVISTO', 'DATA FIM PROG', 'DATA MONT'] if c in df_c.columns]).dropna()
+            datas = pd.concat([df_c[c] for c in ['DATA FIM PROG', 'DATA MONT'] if c in df_c.columns]).dropna()
             if datas.empty: return None
             eixo_x = pd.date_range(start=datas.min(), end=datas.max(), freq='D')
             df_res = pd.DataFrame(index=eixo_x)
-            for c, label in zip(['PREVISTO', 'DATA FIM PROG', 'DATA MONT'], ['PREVISTO', 'PROGRAMADO', 'REALIZADO']):
+            for c, label in zip(['DATA FIM PROG', 'DATA MONT'], ['PROGRAMADO', 'REALIZADO']):
                 if c in df_c.columns:
                     df_res[label] = [len(df_c[df_c[c] <= d]) for d in eixo_x]
             return df_res
@@ -213,7 +216,7 @@ if not df_atual.empty:
         c_exp1, c_exp2 = st.columns(2)
         with c_exp1:
             st.info("💡 **MODELO DE EDIÇÃO**")
-            col_mod = ['TAG', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
+            col_mod = ['TAG', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
             df_mod = df_atual[[c for c in col_mod if c in df_atual.columns]]
             buffer_mod = BytesIO()
             with pd.ExcelWriter(buffer_mod, engine='xlsxwriter') as writer:
@@ -234,12 +237,12 @@ if not df_atual.empty:
             for i, (_, r) in enumerate(df_up.iterrows()):
                 if r['TAG'] in df_atual['TAG'].values:
                     idx = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
-                    st_n = calcular_status(r.get('PREVISTO',''), r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT',''))
-                    for col in ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']:
+                    st_n = calcular_status_tag(r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT',''))
+                    for col in ['DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']:
                         if col in cols_map: ws_atual.update_cell(idx, cols_map[col], r.get(col, ''))
                     if 'STATUS' in cols_map: ws_atual.update_cell(idx, cols_map['STATUS'], st_n)
                 progresso.progress((i + 1) / len(df_up))
-            st.success("Dados importados com sucesso!")
+            st.success("Carga em massa concluída!")
             st.rerun()
 
 if st.sidebar.button("🚪 SAIR"):
