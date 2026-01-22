@@ -6,6 +6,7 @@ import base64
 import json
 import plotly.express as px
 from io import BytesIO
+from datetime import datetime, timedelta
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="SISTEMA ICE CONTROL", layout="wide")
@@ -70,11 +71,18 @@ def calcular_status(previsto, d_i, d_f, d_m):
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
-# --- INTERFACE ---
+# --- INTERFACE LATERAL ---
 st.sidebar.image("LOGO2.jpeg", width=120)
 st.sidebar.divider()
 disc = st.sidebar.selectbox("TRABALHAR COM:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
-aba = st.sidebar.radio("AÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📤 CARGA EM MASSA"])
+
+# Nova Estrutura de Ações na Lateral
+aba = st.sidebar.radio("AÇÃO:", [
+    "📝 EDIÇÃO E QUADRO", 
+    "📊 CURVA S", 
+    "📋 RELATÓRIOS",
+    "📤 CARGA EM MASSA"
+])
 
 df_atual = df_ele if disc == "ELÉTRICA" else df_ins
 ws_atual = ws_ele if disc == "ELÉTRICA" else ws_ins
@@ -89,7 +97,7 @@ if not df_atual.empty:
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"🛠️ Editar TAG de {disc}")
         lista_tags = sorted(df_atual['TAG'].unique())
-        tag_sel = st.selectbox("Selecione o TAG:", lista_tags)
+        tag_sel = st.selectbox("Selecione o TAG para editar:", lista_tags)
         idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
         dados_tag = df_atual.iloc[idx_base]
         
@@ -112,7 +120,7 @@ if not df_atual.empty:
         st.subheader("📋 Quadro Geral de Dados")
         st.dataframe(df_atual, use_container_width=True)
 
-    # --- ABA 2: CURVA S COM INDICADORES ACIMA ---
+    # --- ABA 2: CURVA S ---
     elif aba == "📊 CURVA S":
         def gerar_curva_data(df):
             if df.empty: return None
@@ -137,7 +145,7 @@ if not df_atual.empty:
                 df_res_ele = gerar_curva_data(df_ele)
                 if df_res_ele is not None:
                     st.plotly_chart(px.line(df_res_ele, title="Curva S - ELÉTRICA"), use_container_width=True)
-                else: st.warning("Sem datas para Elétrica.")
+                else: st.warning("Sem datas para Elétrica.") #
 
         with col_g2:
             if not df_ins.empty:
@@ -147,40 +155,77 @@ if not df_atual.empty:
                 df_res_ins = gerar_curva_data(df_ins)
                 if df_res_ins is not None:
                     st.plotly_chart(px.line(df_res_ins, title="Curva S - INSTRUMENTAÇÃO"), use_container_width=True)
-                else: st.warning("Sem datas para Instrumentação.")
+                else: st.warning("Sem datas para Instrumentação.") #
 
-    # --- ABA 3: CARGA EM MASSA (COM EXPORTAÇÃO E IMPORTAÇÃO REATIVADAS) ---
-    elif aba == "📤 CARGA EM MASSA":
-        st.subheader(f"Gerenciamento via Excel - {disc}") #
+    # --- NOVA ABA 3: RELATÓRIOS DE PENDÊNCIAS E AVANÇOS ---
+    elif aba == "📋 RELATÓRIOS":
+        st.subheader(f"📊 Relatórios Detalhados - {disc}")
         
-        # 1. CAIXA DE EXPORTAÇÃO
+        # Processamento de datas para o semanal
+        df_rep = df_atual.copy()
+        df_rep['DATA MONT'] = pd.to_datetime(df_rep['DATA MONT'], dayfirst=True, errors='coerce')
+        hoje = datetime.now()
+        inicio_semana = hoje - timedelta(days=7)
+
+        # Cálculos
+        total_tags = len(df_rep)
+        montados = len(df_rep[df_rep['STATUS'] == 'MONTADO'])
+        pendentes = total_tags - montados
+        avanco_semanal = len(df_rep[df_rep['DATA MONT'] >= inicio_semana])
+
+        c_r1, c_r2, c_r3, c_r4 = st.columns(4)
+        c_r1.metric("Total de TAGs", total_tags)
+        c_r2.metric("Total Montado", montados)
+        c_r3.metric("Pendências", pendentes, delta_color="inverse")
+        c_r4.metric("Avanço 7 Dias", avanco_semanal)
+
+        st.divider()
+        
+        col_r_left, col_r_right = st.columns(2)
+        
+        with col_r_left:
+            st.markdown("#### 🚩 Lista de Pendências")
+            df_pend = df_rep[df_rep['STATUS'] != 'MONTADO'][['TAG', 'STATUS', 'OBS']]
+            st.dataframe(df_pend, use_container_width=True, hide_index=True)
+            
+            # Botão para extrair pendências
+            buf_p = BytesIO()
+            df_pend.to_excel(buf_p, index=False)
+            st.download_button("📥 Extrair Pendências (Excel)", buf_p.getvalue(), f"Pendencias_{disc}.xlsx")
+
+        with col_r_right:
+            st.markdown("#### 📈 Avanço da Semana")
+            df_sem = df_rep[df_rep['DATA MONT'] >= inicio_semana][['TAG', 'DATA MONT', 'OBS']]
+            st.dataframe(df_sem, use_container_width=True, hide_index=True)
+            
+            # Botão para extrair avanço semanal
+            buf_s = BytesIO()
+            df_sem.to_excel(buf_s, index=False)
+            st.download_button("📥 Extrair Avanço Semanal (Excel)", buf_s.getvalue(), f"Avanco_Semanal_{disc}.xlsx")
+
+    # --- ABA 4: CARGA EM MASSA ---
+    elif aba == "📤 CARGA EM MASSA":
+        st.subheader(f"Gerenciamento via Excel - {disc}")
         with st.expander("📥 EXPORTAR MODELO ATUAL", expanded=True):
-            st.write("Baixe a planilha atual para editar os dados no Excel e depois subir novamente.")
             colunas_excel = ['TAG', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
             df_export = df_atual[[c for c in colunas_excel if c in df_atual.columns]]
             output = BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                df_export.to_excel(writer, index=False, sheet_name='Dados')
-            st.download_button(label="⬇️ Baixar Planilha (.xlsx)", data=output.getvalue(), file_name=f"Modelo_{disc}_RNEST.xlsx")
+                df_export.to_excel(writer, index=False)
+            st.download_button(label="⬇️ Baixar Planilha (.xlsx)", data=output.getvalue(), file_name=f"Modelo_{disc}.xlsx")
 
-        st.divider()
-
-        # 2. CAIXA DE IMPORTAÇÃO
         with st.expander("🚀 IMPORTAR ATUALIZAÇÕES EM MASSA", expanded=True):
-            up = st.file_uploader("Arraste o arquivo editado aqui", type="xlsx") #
+            up = st.file_uploader("Arraste o arquivo aqui", type="xlsx") #
             if up and st.button("CONFIRMAR IMPORTAÇÃO"):
                 df_up = pd.read_excel(up).astype(str).replace('nan', '')
-                sucesso = 0
                 for _, r in df_up.iterrows():
                     if r['TAG'] in df_atual['TAG'].values:
                         idx = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
                         st_n = calcular_status(r.get('PREVISTO',''), r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT',''))
-                        # Atualiza células individualmente no Sheets
                         for col in ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']:
                             if col in cols_map: ws_atual.update_cell(idx, cols_map[col], r.get(col, ''))
                         if 'STATUS' in cols_map: ws_atual.update_cell(idx, cols_map['STATUS'], st_n)
-                        sucesso += 1
-                st.success(f"✅ {sucesso} TAGs atualizados com sucesso!")
+                st.success("Base atualizada!")
                 st.rerun()
 
 if st.sidebar.button("🚪 SAIR"):
