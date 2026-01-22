@@ -19,8 +19,7 @@ def tela_login():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        # Ajustado para .png para evitar erro se o .jpeg foi deletado
-        try: st.image("LOGO2.png", width=250)
+        try: st.image("LOGO2.png", width=200) # Tamanho da logo na tela de login
         except: st.header("G-MONT")
         st.subheader("🔐 ACESSO RESTRITO")
         pin = st.text_input("Digite o PIN de acesso:", type="password", max_chars=4)
@@ -56,7 +55,6 @@ def extrair_dados(nome_planilha):
         data = ws.get_all_values()
         if len(data) > 1:
             df = pd.DataFrame(data[1:], columns=data[0])
-            # Limpa espaços em branco nos nomes das colunas para evitar o KeyError
             df.columns = df.columns.str.strip()
             return df, ws
         return pd.DataFrame(), None
@@ -75,9 +73,10 @@ df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
 # --- INTERFACE ---
-# use_container_width=True faz a logo ocupar todo o espaço lateral disponível para enquadrar melhor
-st.sidebar.image("LOGO2.png", use_container_width=True)
+# DIMINUÍMOS AQUI: Alterado de container_width para width=150
+st.sidebar.image("LOGO2.png", width=150) 
 st.sidebar.divider()
+
 disc = st.sidebar.selectbox("TRABALHAR COM:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
 aba = st.sidebar.radio("AÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 CARGA EM MASSA"])
 
@@ -90,7 +89,6 @@ st.divider()
 if not df_atual.empty:
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
 
-    # --- ABA 1: EDIÇÃO E QUADRO ---
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"🛠️ Edição por TAG - {disc}")
         lista_tags = sorted(df_atual['TAG'].unique())
@@ -116,7 +114,6 @@ if not df_atual.empty:
         st.divider()
         st.dataframe(df_atual, use_container_width=True)
 
-    # --- ABA 2: CURVA S ---
     elif aba == "📊 CURVA S":
         def gerar_curva_data(df):
             if df.empty: return None
@@ -124,7 +121,6 @@ if not df_atual.empty:
             for c in ['PREVISTO', 'DATA FIM PROG', 'DATA MONT']:
                 if c in df_c.columns:
                     df_c[c] = pd.to_datetime(df_c[c], dayfirst=True, errors='coerce')
-            
             datas = pd.concat([df_c[c] for c in ['PREVISTO', 'DATA FIM PROG', 'DATA MONT'] if c in df_c.columns]).dropna()
             if datas.empty: return None
             eixo_x = pd.date_range(start=datas.min(), end=datas.max(), freq='D')
@@ -153,34 +149,26 @@ if not df_atual.empty:
                 if df_res_ins is not None: st.plotly_chart(px.line(df_res_ins, title="Curva S - INSTRUMENTAÇÃO"), use_container_width=True)
                 else: st.warning("Sem datas para Instrumentação.")
 
-    # --- ABA 3: RELATÓRIOS ---
     elif aba == "📋 RELATÓRIOS":
         st.subheader(f"📊 Relatórios Detalhados - {disc}")
-        
         df_rep = df_atual.copy()
         if 'DATA MONT' in df_rep.columns:
             df_rep['DATA MONT'] = pd.to_datetime(df_rep['DATA MONT'], dayfirst=True, errors='coerce')
-        
         hoje = datetime.now()
         inicio_semana = hoje - timedelta(days=7)
-
         total_tags = len(df_rep)
         montados = len(df_rep[df_rep['STATUS'] == 'MONTADO']) if 'STATUS' in df_rep.columns else 0
         pendentes = total_tags - montados
         avanco_semanal = len(df_rep[df_rep['DATA MONT'] >= inicio_semana]) if 'DATA MONT' in df_rep.columns else 0
-
         c_r1, c_r2, c_r3, c_r4 = st.columns(4)
         c_r1.metric("Total de TAGs", total_tags)
         c_r2.metric("Total Montado", montados)
         c_r3.metric("Pendências", pendentes)
         c_r4.metric("Avanço 7 Dias", avanco_semanal)
-
         st.divider()
         col_r_left, col_r_right = st.columns(2)
-        
         colunas_pend = [c for c in ['TAG', 'STATUS', 'OBS'] if c in df_rep.columns]
         colunas_avanco = [c for c in ['TAG', 'DATA MONT', 'OBS'] if c in df_rep.columns]
-
         with col_r_left:
             st.markdown("#### 🚩 Lista de Pendências")
             if 'STATUS' in df_rep.columns:
@@ -189,7 +177,6 @@ if not df_atual.empty:
                 buf_p = BytesIO()
                 df_pend.to_excel(buf_p, index=False)
                 st.download_button("📥 Baixar Pendências", buf_p.getvalue(), f"Pendencias_{disc}.xlsx")
-
         with col_r_right:
             st.markdown("#### 📈 Avanço da Semana")
             if 'DATA MONT' in df_rep.columns:
@@ -200,7 +187,6 @@ if not df_atual.empty:
                 df_sem.to_excel(buf_s, index=False)
                 st.download_button("📥 Baixar Avanço", buf_s.getvalue(), f"Avanco_{disc}.xlsx")
 
-    # --- ABA 4: CARGA EM MASSA ---
     elif aba == "📤 CARGA EM MASSA":
         st.subheader("Importação e Exportação")
         with st.expander("📥 EXPORTAR MODELO"):
@@ -210,7 +196,6 @@ if not df_atual.empty:
             with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
                 df_exp.to_excel(writer, index=False)
             st.download_button("Baixar Excel", buffer.getvalue(), "modelo.xlsx")
-
         with st.expander("🚀 IMPORTAR"):
             up = st.file_uploader("Suba o arquivo", type="xlsx")
             if up and st.button("Confirmar"):
