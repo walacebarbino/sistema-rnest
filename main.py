@@ -61,7 +61,7 @@ def extrair_dados(nome_planilha):
     except: return pd.DataFrame(), None
 
 def calcular_status(previsto, d_i, d_f, d_m):
-    def tem(v): return str(v).strip().lower() not in ["nan", "none", "-", "0", ""]
+    def tem(v): return str(v).strip().lower() not in ["nan", "none", "-", "0", "", "none"]
     if tem(d_m): return "MONTADO"
     if tem(d_f): return "PROG. FINALIZADA"
     if tem(d_i): return "EM ANDAMENTO"
@@ -90,7 +90,7 @@ st.divider()
 if not df_atual.empty:
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
 
-    # --- ABA 1: EDIÇÃO ---
+    # --- ABA 1: EDIÇÃO (AGORA COM CALENDÁRIO) ---
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"🛠️ Edição por TAG - {disc}")
         lista_tags = sorted(df_atual['TAG'].unique())
@@ -98,25 +98,51 @@ if not df_atual.empty:
         idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
         dados_tag = df_atual.iloc[idx_base]
         
+        # Função para converter texto da planilha em objeto de data para o Streamlit
+        def converter_para_data(texto):
+            try: return datetime.strptime(texto, "%d/%m/%Y").date()
+            except: return None
+
         with st.form("form_edit"):
             c1, c2, c3, c4 = st.columns(4)
-            v_prev = c1.text_input("Previsto", value=dados_tag.get('PREVISTO', ''))
-            v_ini = c2.text_input("Início Prog", value=dados_tag.get('DATA INIC PROG', ''))
-            v_fim = c3.text_input("Fim Prog", value=dados_tag.get('DATA FIM PROG', ''))
-            v_mont = c4.text_input("Data Montagem", value=dados_tag.get('DATA MONT', ''))
-            st_sug = calcular_status(v_prev, v_ini, v_fim, v_mont)
+            
+            # Campos de Data com Calendário
+            v_prev = c1.date_input("Previsto", value=converter_para_data(dados_tag.get('PREVISTO')), format="DD/MM/YYYY")
+            v_ini = c2.date_input("Início Prog", value=converter_para_data(dados_tag.get('DATA INIC PROG')), format="DD/MM/YYYY")
+            v_fim = c3.date_input("Fim Prog", value=converter_para_data(dados_tag.get('DATA FIM PROG')), format="DD/MM/YYYY")
+            v_mont = c4.date_input("Data Montagem", value=converter_para_data(dados_tag.get('DATA MONT')), format="DD/MM/YYYY")
+            
             obs = st.text_input("Observação", value=dados_tag.get('OBS', ''))
+            
             if st.form_submit_button("💾 SALVAR ALTERAÇÃO"):
+                # Converte as datas de volta para texto no formato brasileiro para salvar na planilha
+                f_prev = v_prev.strftime("%d/%m/%Y") if v_prev else ""
+                f_ini = v_ini.strftime("%d/%m/%Y") if v_ini else ""
+                f_fim = v_fim.strftime("%d/%m/%Y") if v_fim else ""
+                f_mont = v_mont.strftime("%d/%m/%Y") if v_mont else ""
+                
+                st_sug = calcular_status(f_prev, f_ini, f_fim, f_mont)
                 linha = idx_base + 2
-                campos = {'PREVISTO':v_prev, 'DATA INIC PROG':v_ini, 'DATA FIM PROG':v_fim, 'DATA MONT':v_mont, 'STATUS':st_sug, 'OBS':obs}
+                
+                campos = {
+                    'PREVISTO': f_prev, 
+                    'DATA INIC PROG': f_ini, 
+                    'DATA FIM PROG': f_fim, 
+                    'DATA MONT': f_mont, 
+                    'STATUS': st_sug, 
+                    'OBS': obs
+                }
+                
                 for col, val in campos.items():
                     if col in cols_map: ws_atual.update_cell(linha, cols_map[col], val)
-                st.success("Dados salvos!")
+                
+                st.success("Dados salvos com sucesso!")
                 st.rerun()
+        
         st.divider()
         st.dataframe(df_atual, use_container_width=True)
 
-    # --- ABA 2: CURVA S (FUNDO CLARO) ---
+    # --- ABA 2: CURVA S ---
     elif aba == "📊 CURVA S":
         def gerar_curva_data(df):
             if df.empty: return None
@@ -141,9 +167,7 @@ if not df_atual.empty:
                 st.progress(p_ele/100)
                 df_res_ele = gerar_curva_data(df_ele)
                 if df_res_ele is not None: 
-                    # Template padrão (claro)
-                    fig_ele = px.line(df_res_ele, title="Curva S - ELÉTRICA")
-                    st.plotly_chart(fig_ele, use_container_width=True)
+                    st.plotly_chart(px.line(df_res_ele, title="Curva S - ELÉTRICA"), use_container_width=True)
 
         with col_g2:
             if not df_ins.empty:
@@ -152,46 +176,50 @@ if not df_atual.empty:
                 st.progress(p_ins/100)
                 df_res_ins = gerar_curva_data(df_ins)
                 if df_res_ins is not None: 
-                    fig_ins = px.line(df_res_ins, title="Curva S - INSTRUMENTAÇÃO")
-                    st.plotly_chart(fig_ins, use_container_width=True)
+                    st.plotly_chart(px.line(df_res_ins, title="Curva S - INSTRUMENTAÇÃO"), use_container_width=True)
 
     # --- ABA 3: RELATÓRIOS ---
     elif aba == "📋 RELATÓRIOS":
         st.subheader(f"📊 Relatórios Detalhados - {disc}")
         df_rep = df_atual.copy()
+        # Tratamento de erro para colunas ausentes na visualização
+        colunas_necessarias = ['TAG', 'STATUS', 'DATA MONT', 'OBS']
+        for col in colunas_necessarias:
+            if col not in df_rep.columns: df_rep[col] = ""
+
         if 'DATA MONT' in df_rep.columns:
             df_rep['DATA MONT'] = pd.to_datetime(df_rep['DATA MONT'], dayfirst=True, errors='coerce')
+        
         hoje = datetime.now()
         inicio_semana = hoje - timedelta(days=7)
+        
         total_tags = len(df_rep)
-        montados = len(df_rep[df_rep['STATUS'] == 'MONTADO']) if 'STATUS' in df_rep.columns else 0
+        montados = len(df_rep[df_rep['STATUS'] == 'MONTADO'])
         pendentes = total_tags - montados
-        avanco_semanal = len(df_rep[df_rep['DATA MONT'] >= inicio_semana]) if 'DATA MONT' in df_rep.columns else 0
+        avanco_semanal = len(df_rep[df_rep['DATA MONT'] >= inicio_semana])
+        
         c_r1, c_r2, c_r3, c_r4 = st.columns(4)
         c_r1.metric("Total de TAGs", total_tags)
         c_r2.metric("Total Montado", montados)
         c_r3.metric("Pendências", pendentes)
         c_r4.metric("Avanço 7 Dias", avanco_semanal)
+        
         st.divider()
         col_r_left, col_r_right = st.columns(2)
         with col_r_left:
             st.markdown("#### 🚩 Lista de Pendências")
-            if 'STATUS' in df_rep.columns:
-                df_pend = df_rep[df_rep['STATUS'] != 'MONTADO']
-                st.dataframe(df_pend[['TAG', 'STATUS', 'OBS']], use_container_width=True, hide_index=True)
+            df_pend = df_rep[df_rep['STATUS'] != 'MONTADO']
+            st.dataframe(df_pend[['TAG', 'STATUS', 'OBS']], use_container_width=True, hide_index=True)
         with col_r_right:
             st.markdown("#### 📈 Avanço da Semana")
-            if 'DATA MONT' in df_rep.columns:
-                df_sem = df_rep[df_rep['DATA MONT'] >= inicio_semana].copy()
-                df_sem['DATA MONT'] = df_sem['DATA MONT'].dt.strftime('%d/%m/%Y')
-                st.dataframe(df_sem[['TAG', 'DATA MONT', 'OBS']], use_container_width=True, hide_index=True)
+            df_sem = df_rep[df_rep['DATA MONT'] >= inicio_semana].copy()
+            df_sem['DATA MONT'] = df_sem['DATA MONT'].dt.strftime('%d/%m/%Y')
+            st.dataframe(df_sem[['TAG', 'DATA MONT', 'OBS']], use_container_width=True, hide_index=True)
 
-    # --- ABA 4: CARGA EM MASSA (OPÇÃO EXPORTAR TUDO) ---
+    # --- ABA 4: CARGA EM MASSA ---
     elif aba == "📤 CARGA EM MASSA":
         st.subheader("Importação e Exportação de Dados")
-        
         c_exp1, c_exp2 = st.columns(2)
-        
         with c_exp1:
             st.info("💡 **MODELO DE EDIÇÃO**")
             col_mod = ['TAG', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
