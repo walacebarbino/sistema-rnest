@@ -19,7 +19,7 @@ def tela_login():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        try: st.image("LOGO2.png", width=200) # Tamanho da logo na tela de login
+        try: st.image("LOGO2.png", width=200) 
         except: st.header("G-MONT")
         st.subheader("🔐 ACESSO RESTRITO")
         pin = st.text_input("Digite o PIN de acesso:", type="password", max_chars=4)
@@ -72,9 +72,12 @@ def calcular_status(previsto, d_i, d_f, d_m):
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
-# --- INTERFACE ---
-# DIMINUÍMOS AQUI: Alterado de container_width para width=150
-st.sidebar.image("LOGO2.png", width=150) 
+# --- INTERFACE LATERAL (CENTRALIZANDO A LOGO) ---
+# Criamos 3 colunas na sidebar: a do meio conterá a imagem
+col_side1, col_side2, col_side3 = st.sidebar.columns([1, 3, 1])
+with col_side2:
+    st.image("LOGO2.png", width=120) # Ajuste o width aqui se quiser ela maior ou menor
+
 st.sidebar.divider()
 
 disc = st.sidebar.selectbox("TRABALHAR COM:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
