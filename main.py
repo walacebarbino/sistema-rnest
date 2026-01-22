@@ -3,7 +3,7 @@ import pandas as pd
 from google.oauth2.service_account import Credentials
 import gspread
 
-# --- 1. CONFIGURAÇÃO DE ACESSO ---
+# --- 1. ACESSO ---
 scope = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
 creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
 client = gspread.authorize(creds)
@@ -14,7 +14,6 @@ st.sidebar.title("🛠️ GESTÃO RNEST")
 disc = st.sidebar.selectbox("Disciplina:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
 aba = st.sidebar.radio("Navegação:", ["📊 Quadro Geral", "📝 Lançar Individual", "📤 Carga em Massa"])
 
-# Regra de Status Automática
 def calcular_status(d_i, d_m):
     if d_m and str(d_m).strip() != "" and str(d_m).lower() != 'nan':
         return "MONTADO"
@@ -24,15 +23,11 @@ def calcular_status(d_i, d_m):
         return "AGUARDANDO PROG"
 
 try:
-    nome_planilha = "BD_ELE" if disc == "ELÉTRICA" else "BD_INST"
-    sh = client.open(nome_planilha)
+    sh = client.open("BD_ELE") if disc == "ELÉTRICA" else client.open("BD_INST")
     ws = sh.get_worksheet(0)
-    
-    # Busca valores crus para evitar erro de objeto Response
     valores = ws.get_all_values()
     
     if valores:
-        # Cria DataFrame mantendo TODAS as colunas extras da planilha
         df = pd.DataFrame(valores[1:], columns=valores[0])
         cols_map = {col: i + 1 for i, col in enumerate(valores[0])}
 
@@ -42,7 +37,7 @@ try:
 
         elif aba == "📝 Lançar Individual":
             st.header(f"Atualização Manual - {disc}")
-            tag_alvo = st.selectbox("Selecione o TAG:", df['TAG'].unique())
+            tag_alvo = st.selectbox("TAG:", df['TAG'].unique())
             dados_tag = df[df['TAG'] == tag_alvo].iloc[0]
             idx_plan = df.index[df['TAG'] == tag_alvo][0] + 2
             
@@ -55,7 +50,6 @@ try:
                 
                 if st.form_submit_button("SALVAR"):
                     n_status = calcular_status(d_i, d_m)
-                    # Grava nas colunas específicas
                     for col, val in zip(['DATA INIC PROG', 'DATA FIM PROG', 'PREVISTO', 'DATA MONT', 'STATUS'], [d_i, d_f, d_p, d_m, n_status]):
                         if col in cols_map:
                             ws.update_cell(idx_plan, cols_map[col], val)
@@ -64,10 +58,10 @@ try:
 
         elif aba == "📤 Carga em Massa":
             st.header(f"Carga em Massa - {disc}")
-            file = st.file_uploader("Suba seu Excel (.xlsx)", type="xlsx")
+            file = st.file_uploader("Arquivo .xlsx", type="xlsx")
             if file:
                 df_up = pd.read_excel(file).astype(str).replace('nan', '')
-                if st.button("🚀 PROCESSAR CARGA"):
+                if st.button("🚀 PROCESSAR"):
                     for _, row in df_up.iterrows():
                         try:
                             m_idx = df.index[df['TAG'] == str(row['TAG'])][0] + 2
@@ -78,7 +72,7 @@ try:
                             if 'STATUS' in cols_map:
                                 ws.update_cell(m_idx, cols_map['STATUS'], n_stat)
                         except: continue
-                    st.success("Dados atualizados!")
+                    st.success("Carga finalizada!")
                     st.rerun()
 except Exception as e:
     st.error(f"Erro: {e}")
