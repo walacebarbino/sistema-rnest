@@ -19,8 +19,9 @@ def tela_login():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        try: st.image("LOGO2.jpeg", width=250)
-        except: st.header("ICE CONTROL")
+        # Ajustado para .png para evitar erro se o .jpeg foi deletado
+        try: st.image("LOGO2.png", width=250)
+        except: st.header("G-MONT")
         st.subheader("🔐 ACESSO RESTRITO")
         pin = st.text_input("Digite o PIN de acesso:", type="password", max_chars=4)
         if st.button("ENTRAR NO SISTEMA"):
@@ -74,7 +75,8 @@ df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
 # --- INTERFACE ---
-st.sidebar.image("LOGO2.png", width=120)
+# use_container_width=True faz a logo ocupar todo o espaço lateral disponível para enquadrar melhor
+st.sidebar.image("LOGO2.png", use_container_width=True)
 st.sidebar.divider()
 disc = st.sidebar.selectbox("TRABALHAR COM:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
 aba = st.sidebar.radio("AÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 CARGA EM MASSA"])
@@ -151,19 +153,17 @@ if not df_atual.empty:
                 if df_res_ins is not None: st.plotly_chart(px.line(df_res_ins, title="Curva S - INSTRUMENTAÇÃO"), use_container_width=True)
                 else: st.warning("Sem datas para Instrumentação.")
 
-    # --- ABA 3: RELATÓRIOS (FIXED KEYERROR) ---
+    # --- ABA 3: RELATÓRIOS ---
     elif aba == "📋 RELATÓRIOS":
         st.subheader(f"📊 Relatórios Detalhados - {disc}")
         
         df_rep = df_atual.copy()
-        # Converte para data com segurança
         if 'DATA MONT' in df_rep.columns:
             df_rep['DATA MONT'] = pd.to_datetime(df_rep['DATA MONT'], dayfirst=True, errors='coerce')
         
         hoje = datetime.now()
         inicio_semana = hoje - timedelta(days=7)
 
-        # Métricas
         total_tags = len(df_rep)
         montados = len(df_rep[df_rep['STATUS'] == 'MONTADO']) if 'STATUS' in df_rep.columns else 0
         pendentes = total_tags - montados
@@ -178,7 +178,6 @@ if not df_atual.empty:
         st.divider()
         col_r_left, col_r_right = st.columns(2)
         
-        # Filtro dinâmico de colunas para evitar o erro de 'not in index'
         colunas_pend = [c for c in ['TAG', 'STATUS', 'OBS'] if c in df_rep.columns]
         colunas_avanco = [c for c in ['TAG', 'DATA MONT', 'OBS'] if c in df_rep.columns]
 
@@ -195,7 +194,6 @@ if not df_atual.empty:
             st.markdown("#### 📈 Avanço da Semana")
             if 'DATA MONT' in df_rep.columns:
                 df_sem = df_rep[df_rep['DATA MONT'] >= inicio_semana][colunas_avanco]
-                # Converte de volta para texto apenas para exibição
                 df_sem['DATA MONT'] = df_sem['DATA MONT'].dt.strftime('%d/%m/%Y')
                 st.dataframe(df_sem, use_container_width=True, hide_index=True)
                 buf_s = BytesIO()
