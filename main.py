@@ -10,7 +10,6 @@ from datetime import datetime, timedelta
 
 # --- CONFIGURAÇÃO E DATA BASE DA OBRA ---
 st.set_page_config(page_title="SISTEMA G-MONT", layout="wide")
-# Baseado na sua informação de que 22/01/2026 é Semana 17
 DATA_INICIO_OBRA = datetime(2025, 9, 29) 
 
 # --- CSS PARA ALINHAMENTO E PADRONIZAÇÃO ---
@@ -64,11 +63,10 @@ def extrair_dados(nome_planilha):
         if len(data) > 1:
             df = pd.DataFrame(data[1:], columns=data[0])
             df.columns = df.columns.str.strip()
-            # Garante colunas mínimas para evitar erros das imagens 02f895 e 03e83c
-            colunas_obrigatorias = ['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']
+            # Garante colunas contra KeyError (Resolvendo image_03e83c e image_02f895)
+            colunas_obrigatorias = ['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS', 'DESCRIÇÃO', 'ÁREA']
             for col in colunas_obrigatorias:
                 if col not in df.columns: df[col] = ""
-            
             for col in df.columns:
                 df[col] = df[col].astype(str).str.strip().replace(['nan', 'None', 'NaT', '-'], '')
             return df, ws
@@ -77,12 +75,13 @@ def extrair_dados(nome_planilha):
 
 # --- LÓGICA DE SEMANA E STATUS ---
 def get_dates_from_week(week_number):
+    if not week_number or week_number == "": return None, None
     monday = DATA_INICIO_OBRA + timedelta(weeks=(int(week_number) - 1))
     friday = monday + timedelta(days=4)
     return monday.date(), friday.date()
 
 def calcular_status_tag(d_i, d_f, d_m):
-    def tem(v): return str(v).strip() not in ["", "None", "nan", "-"]
+    def tem(v): return str(v).strip() not in ["", "None", "nan", "-", "DD/MM/YYYY"]
     if tem(d_m): return "MONTADO"
     if tem(d_i) or tem(d_f): return "PROGRAMADO"
     return "AGUARDANDO PROG"
@@ -99,31 +98,24 @@ df_atual = df_ele if disc == "ELÉTRICA" else df_ins
 ws_atual = ws_ele if disc == "ELÉTRICA" else ws_ins
 
 if not df_atual.empty:
-    # Recalcula status para garantir Dashboards atualizados (Resolve image_03e056)
+    # Recalcula status para Dashboards (Resolvendo image_03e056 e image_038375)
     df_atual['STATUS'] = df_atual.apply(lambda r: calcular_status_tag(r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT','')), axis=1)
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
 
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"📝 Edição por TAG - {disc}")
-        tag_sel = st.selectbox("Selecione o TAG para editar:", sorted(df_atual['TAG'].unique()))
+        tag_sel = st.selectbox("Selecione o TAG:", sorted(df_atual['TAG'].unique()))
         idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
         dados_tag = df_atual.iloc[idx_base]
 
-        # REATIVIDADE: Sessão para controlar as datas ao mudar a semana
-        if f"sem_{tag_sel}" not in st.session_state:
-            st.session_state[f"sem_{tag_sel}"] = int(dados_tag['SEMANA OBRA']) if str(dados_tag['SEMANA OBRA']).isdigit() else 17
-
-        def mudar_semana():
-            st.session_state[f"sem_{tag_sel}"] = st.session_state[f"temp_sem_{tag_sel}"]
-
-        c_sem, c_blank = st.columns([1, 3])
-        sem_obra = c_sem.number_input("SEMANA DA OBRA", min_value=1, key=f"temp_sem_{tag_sel}", on_change=mudar_semana, value=st.session_state[f"sem_{tag_sel}"])
+        # Caixa de Semana que aceita VAZIO
+        val_sem_orig = dados_tag['SEMANA OBRA']
+        sem_input = st.text_input("SEMANA DA OBRA (Deixe vazio para desprogramar):", value=val_sem_orig)
         
-        sug_ini, sug_fim = get_dates_from_week(sem_obra)
+        sug_ini, sug_fim = get_dates_from_week(sem_input) if sem_input.isdigit() else (None, None)
 
-        with st.form("form_edit_final"):
+        with st.form("form_edit_v3"):
             col1, col2, col3, col4 = st.columns(4)
-            
             def conv_dt(val, default):
                 try: return datetime.strptime(str(val), "%d/%m/%Y").date()
                 except: return default
@@ -134,7 +126,6 @@ if not df_atual.empty:
             
             st_atual = calcular_status_tag(v_ini, v_fim, v_mont)
             col4.text_input("Status Atual", value=st_atual, disabled=True)
-            
             v_obs = st.text_input("Observações:", value=dados_tag['OBS'])
             
             if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
@@ -142,62 +133,80 @@ if not df_atual.empty:
                 f_fim = v_fim.strftime("%d/%m/%Y") if v_fim else ""
                 f_mont = v_mont.strftime("%d/%m/%Y") if v_mont else ""
                 
-                linha = idx_base + 2
-                updates = {'SEMANA OBRA': str(sem_obra), 'DATA INIC PROG': f_ini, 'DATA FIM PROG': f_fim, 'DATA MONT': f_mont, 'STATUS': st_atual, 'OBS': v_obs}
+                updates = {'SEMANA OBRA': sem_input, 'DATA INIC PROG': f_ini, 'DATA FIM PROG': f_fim, 'DATA MONT': f_mont, 'STATUS': st_atual, 'OBS': v_obs}
                 for col, val in updates.items():
-                    if col in cols_map: ws_atual.update_cell(linha, cols_map[col], val)
+                    if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], val)
                 st.success("Salvo!")
                 st.rerun()
-        
-        st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'STATUS', 'DATA MONT', 'OBS']], use_container_width=True, hide_index=True)
+
+    elif aba == "📊 CURVA S":
+        st.subheader("📊 Progresso Físico")
+        df_atual['DT_M'] = pd.to_datetime(df_atual['DATA MONT'], dayfirst=True, errors='coerce')
+        df_real = df_atual.dropna(subset=['DT_M']).sort_values('DT_M')
+        if not df_real.empty:
+            df_real['Acumulado'] = range(1, len(df_real) + 1)
+            fig = px.line(df_real, x='DT_M', y='Acumulado', title="Avanço Realizado")
+            st.plotly_chart(fig, use_container_width=True)
 
     elif aba == "📋 RELATÓRIOS":
-        st.subheader("📊 Painel de Controle")
+        st.subheader("📊 Painel de Controle e Relatórios")
+        # Métricas (Resolvendo image_02ed0e)
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Total", len(df_atual))
-        c2.metric("Montados", len(df_atual[df_atual['STATUS'] == 'MONTADO']))
-        c3.metric("Programados", len(df_atual[df_atual['STATUS'] == 'PROGRAMADO']))
-        c4.metric("Aguardando", len(df_atual[df_atual['STATUS'] == 'AGUARDANDO PROG']))
+        c1.metric("Total TAGs", len(df_atual))
+        c2.metric("Montados ✅", len(df_atual[df_atual['STATUS'] == 'MONTADO']))
+        c3.metric("Programados 📅", len(df_atual[df_atual['STATUS'] == 'PROGRAMADO']))
+        c4.metric("Aguardando ⏳", len(df_atual[df_atual['STATUS'] == 'AGUARDANDO PROG']))
 
         st.divider()
+        # 1. PROGRAMADO PRODUÇÃO (Resolvendo sua queixa de falta de relatórios)
         st.markdown("### 📋 PROGRAMADO PRODUÇÃO")
-        semanas_existentes = sorted([s for s in df_atual['SEMANA OBRA'].unique() if s != ""], key=int, reverse=True)
-        sem_f = st.selectbox("Filtrar por Semana de Obra:", semanas_existentes if semanas_existentes else ["17"])
+        semanas = sorted([s for s in df_atual['SEMANA OBRA'].unique() if s != ""], key=int, reverse=True)
+        sem_f = st.selectbox("Filtrar Semana (Deixe vazio para ver todos programados):", [""] + semanas)
         
-        df_p = df_atual[(df_atual['STATUS'] == 'PROGRAMADO') & (df_atual['SEMANA OBRA'] == sem_f)]
-        st.dataframe(df_p[['TAG', 'DATA INIC PROG', 'DATA FIM PROG', 'OBS']], use_container_width=True, hide_index=True)
+        df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
+        if sem_f != "": df_p = df_p[df_p['SEMANA OBRA'] == sem_f]
         
-        if not df_p.empty:
-            buf = BytesIO()
-            with pd.ExcelWriter(buf, engine='xlsxwriter') as writer: df_p.to_excel(writer, index=False)
-            st.download_button("📥 BAIXAR PROGRAMADO PRODUÇÃO (EXCEL)", buf.getvalue(), f"PROD_SEM_{sem_f}.xlsx", use_container_width=True)
+        st.dataframe(df_p[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'OBS']], use_container_width=True, hide_index=True)
+        
+        # 2. RELATÓRIO DE PENDÊNCIAS (Restaurado)
+        st.divider()
+        st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
+        df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
+        st.dataframe(df_pend[['TAG', 'STATUS', 'ÁREA', 'OBS']], use_container_width=True, hide_index=True)
+
+        # 3. AVANÇO SEMANAL / REALIZADO (Restaurado)
+        st.divider()
+        st.markdown("### 📈 REALIZADO (ÚLTIMOS 7 DIAS)")
+        df_atual['DT_TEMP'] = pd.to_datetime(df_atual['DATA MONT'], dayfirst=True, errors='coerce')
+        df_setec = df_atual[df_atual['DT_TEMP'] >= (datetime.now() - timedelta(days=7))]
+        st.dataframe(df_setec[['TAG', 'DATA MONT', 'OBS']], use_container_width=True, hide_index=True)
+
+        # Botões de Download
+        buf = BytesIO()
+        with pd.ExcelWriter(buf, engine='xlsxwriter') as writer:
+            df_p.to_excel(writer, sheet_name='Programado', index=False)
+            df_pend.to_excel(writer, sheet_name='Pendencias', index=False)
+        st.download_button("📥 BAIXAR RELATÓRIOS COMPLETOS (EXCEL)", buf.getvalue(), "Relatorios_GMONT.xlsx", use_container_width=True)
 
     elif aba == "📤 CARGA EM MASSA":
-        st.subheader("📤 Gestão de Dados em Massa")
-        c_m1, c_m2 = st.columns(2)
-        with c_m1:
-            st.info("Baixe o modelo para preenchimento")
+        st.subheader("📤 Gestão de Dados e Importação")
+        # Restaurando botões de exportação (Resolvendo image_02f7fc)
+        col_ex1, col_ex2 = st.columns(2)
+        with col_ex1:
+            st.info("Modelo para Carga")
             mod = df_atual[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']].head(5)
-            buf_m = BytesIO()
-            with pd.ExcelWriter(buf_m, engine='xlsxwriter') as writer: mod.to_excel(writer, index=False)
-            st.download_button("📥 Baixar Modelo Excel", buf_m.getvalue(), "modelo_carga.xlsx")
-        
-        with c_m2:
-            st.success("Exportação completa da base")
-            buf_f = BytesIO()
-            with pd.ExcelWriter(buf_f, engine='xlsxwriter') as writer: df_atual.to_excel(writer, index=False)
-            st.download_button("📥 Exportar Base Completa", buf_f.getvalue(), "base_completa.xlsx")
+            b_m = BytesIO(); mod.to_excel(b_m, index=False); st.download_button("📥 Baixar Modelo", b_m.getvalue(), "modelo.xlsx")
+        with col_ex2:
+            st.success("Base Completa")
+            b_f = BytesIO(); df_atual.to_excel(b_f, index=False); st.download_button("📥 Exportar Tudo", b_f.getvalue(), "base_completa.xlsx")
 
         st.divider()
-        up = st.file_uploader("Upload de arquivo preenchido:", type="xlsx")
-        if up and st.button("🚀 EXECUTAR CARGA EM MASSA"):
+        up = st.file_uploader("Selecione o arquivo Excel atualizado:", type="xlsx")
+        if up and st.button("🚀 EXECUTAR IMPORTAÇÃO"):
             df_up = pd.read_excel(up).astype(str).replace('nan', '')
-            prog = st.progress(0)
-            for i, (_, r) in enumerate(df_up.iterrows()):
+            for _, r in df_up.iterrows():
                 if r['TAG'] in df_atual['TAG'].values:
                     ln = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
                     for c in df_up.columns:
                         if c in cols_map: ws_atual.update_cell(ln, cols_map[c], r[c])
-                prog.progress((i+1)/len(df_up))
-            st.success("Carga Finalizada!")
-            st.rerun()
+            st.success("Importação Concluída!"); st.rerun()
