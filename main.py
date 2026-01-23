@@ -13,32 +13,24 @@ st.set_page_config(page_title="SISTEMA G-MONT", layout="wide")
 # Baseado na sua informação de que 22/01/2026 é Semana 17
 DATA_INICIO_OBRA = datetime(2025, 9, 29) 
 
-# --- CSS PARA ALINHAMENTO DAS 4 CAIXAS + SEMANA ---
+# --- CSS PARA ALINHAMENTO E PADRONIZAÇÃO ---
 st.markdown("""
     <style>
     [data-testid="column"] { padding-left: 5px !important; padding-right: 5px !important; }
     .stDateInput div, .stTextInput div, .stNumberInput div { height: 45px !important; }
     label p { font-weight: bold !important; font-size: 14px !important; min-height: 25px; }
-    input:disabled { 
-        background-color: #1e293b !important; 
-        color: #60a5fa !important; 
-        opacity: 1 !important; 
-        -webkit-text-fill-color: #60a5fa !important; 
-    }
+    input:disabled { background-color: #1e293b !important; color: #60a5fa !important; opacity: 1 !important; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- CONTROLE DE ACESSO ---
-if 'logado' not in st.session_state:
-    st.session_state['logado'] = False
+if 'logado' not in st.session_state: st.session_state['logado'] = False
 
 def tela_login():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
-        try: st.image("LOGO2.png", width=200)
-        except: st.header("G-MONT")
-        st.subheader("🔐 ACESSO RESTRITO")
+        st.subheader("🔐 ACESSO RESTRITO G-MONT")
         pin = st.text_input("Digite o PIN:", type="password", max_chars=4)
         if st.button("ENTRAR NO SISTEMA"):
             if pin == "1234":
@@ -47,8 +39,7 @@ def tela_login():
             else: st.error("PIN Incorreto.")
     st.stop()
 
-if not st.session_state['logado']:
-    tela_login()
+if not st.session_state['logado']: tela_login()
 
 # --- CONEXÃO GOOGLE SHEETS ---
 @st.cache_resource
@@ -73,6 +64,11 @@ def extrair_dados(nome_planilha):
         if len(data) > 1:
             df = pd.DataFrame(data[1:], columns=data[0])
             df.columns = df.columns.str.strip()
+            # Garante colunas mínimas para evitar erros das imagens 02f895 e 03e83c
+            colunas_obrigatorias = ['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']
+            for col in colunas_obrigatorias:
+                if col not in df.columns: df[col] = ""
+            
             for col in df.columns:
                 df[col] = df[col].astype(str).str.strip().replace(['nan', 'None', 'NaT', '-'], '')
             return df, ws
@@ -81,7 +77,7 @@ def extrair_dados(nome_planilha):
 
 # --- LÓGICA DE SEMANA E STATUS ---
 def get_dates_from_week(week_number):
-    monday = DATA_INICIO_OBRA + timedelta(weeks=(week_number - 1))
+    monday = DATA_INICIO_OBRA + timedelta(weeks=(int(week_number) - 1))
     friday = monday + timedelta(days=4)
     return monday.date(), friday.date()
 
@@ -95,101 +91,113 @@ def calcular_status_tag(d_i, d_f, d_m):
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
-st.sidebar.image("LOGO2.png", width=120)
-disc = st.sidebar.selectbox("TRABALHAR COM:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
-aba = st.sidebar.radio("AÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 CARGA EM MASSA"])
+st.sidebar.subheader("MENU G-MONT")
+disc = st.sidebar.selectbox("DISCIPLINA:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
+aba = st.sidebar.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 CARGA EM MASSA"])
 
 df_atual = df_ele if disc == "ELÉTRICA" else df_ins
 ws_atual = ws_ele if disc == "ELÉTRICA" else ws_ins
 
 if not df_atual.empty:
+    # Recalcula status para garantir Dashboards atualizados (Resolve image_03e056)
+    df_atual['STATUS'] = df_atual.apply(lambda r: calcular_status_tag(r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT','')), axis=1)
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
 
     if aba == "📝 EDIÇÃO E QUADRO":
-        st.subheader(f"🛠️ Edição por TAG - {disc}")
-        tag_sel = st.selectbox("Selecione o TAG:", sorted(df_atual['TAG'].unique()))
+        st.subheader(f"📝 Edição por TAG - {disc}")
+        tag_sel = st.selectbox("Selecione o TAG para editar:", sorted(df_atual['TAG'].unique()))
         idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
         dados_tag = df_atual.iloc[idx_base]
+
+        # REATIVIDADE: Sessão para controlar as datas ao mudar a semana
+        if f"sem_{tag_sel}" not in st.session_state:
+            st.session_state[f"sem_{tag_sel}"] = int(dados_tag['SEMANA OBRA']) if str(dados_tag['SEMANA OBRA']).isdigit() else 17
+
+        def mudar_semana():
+            st.session_state[f"sem_{tag_sel}"] = st.session_state[f"temp_sem_{tag_sel}"]
+
+        c_sem, c_blank = st.columns([1, 3])
+        sem_obra = c_sem.number_input("SEMANA DA OBRA", min_value=1, key=f"temp_sem_{tag_sel}", on_change=mudar_semana, value=st.session_state[f"sem_{tag_sel}"])
         
-        def conv_data(texto, default=None):
-            try: return datetime.strptime(str(texto), "%d/%m/%Y").date()
-            except: return default
+        sug_ini, sug_fim = get_dates_from_week(sem_obra)
 
-        with st.form("form_edit"):
-            st.markdown(f"**TAG: {tag_sel}**")
+        with st.form("form_edit_final"):
+            col1, col2, col3, col4 = st.columns(4)
             
-            # PRIMEIRA LINHA: SEMANA E DATAS (TODAS ALINHADAS)
-            c_sem, c_ini, c_fim, c_mont, c_status = st.columns([0.8, 1, 1, 1, 1])
-            
-            val_sem = dados_tag.get('SEMANA OBRA', '17')
-            sem_obra = c_sem.number_input("SEM. OBRA", min_value=1, value=int(val_sem) if val_sem.isdigit() else 17)
-            
-            # Sugestão automática baseada na semana (Segunda a Sexta)
-            sug_ini, sug_fim = get_dates_from_week(sem_obra)
-            
-            # Se já houver data na planilha, usa ela, senão usa a sugestão da semana
-            dt_i = conv_data(dados_tag.get('DATA INIC PROG'), sug_ini)
-            dt_f = conv_data(dados_tag.get('DATA FIM PROG'), sug_fim)
-            dt_m = conv_data(dados_tag.get('DATA MONT'), None)
+            def conv_dt(val, default):
+                try: return datetime.strptime(str(val), "%d/%m/%Y").date()
+                except: return default
 
-            v_ini = c_ini.date_input("Início Prog", value=dt_i, format="DD/MM/YYYY")
-            v_fim = c_fim.date_input("Fim Prog", value=dt_f, format="DD/MM/YYYY")
-            v_mont = c_mont.date_input("Montagem", value=dt_m, format="DD/MM/YYYY")
+            v_ini = col1.date_input("Início Prog", value=conv_dt(dados_tag['DATA INIC PROG'], sug_ini), format="DD/MM/YYYY")
+            v_fim = col2.date_input("Fim Prog", value=conv_dt(dados_tag['DATA FIM PROG'], sug_fim), format="DD/MM/YYYY")
+            v_mont = col3.date_input("Data Montagem", value=conv_dt(dados_tag['DATA MONT'], None), format="DD/MM/YYYY")
             
-            # Status bloqueado para manter tamanho
-            st_auto = calcular_status_tag(v_ini, v_fim, v_mont)
-            v_status = c_status.text_input("Status Atual", value=st_auto, disabled=True)
+            st_atual = calcular_status_tag(v_ini, v_fim, v_mont)
+            col4.text_input("Status Atual", value=st_atual, disabled=True)
             
-            v_obs = st.text_input("Observação:", value=dados_tag.get('OBS', ''))
+            v_obs = st.text_input("Observações:", value=dados_tag['OBS'])
             
-            if st.form_submit_button("💾 SALVAR ALTERAÇÃO"):
+            if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
                 f_ini = v_ini.strftime("%d/%m/%Y") if v_ini else ""
                 f_fim = v_fim.strftime("%d/%m/%Y") if v_fim else ""
                 f_mont = v_mont.strftime("%d/%m/%Y") if v_mont else ""
                 
                 linha = idx_base + 2
-                updates = {
-                    'SEMANA OBRA': str(sem_obra),
-                    'DATA INIC PROG': f_ini,
-                    'DATA FIM PROG': f_fim,
-                    'DATA MONT': f_mont,
-                    'STATUS': calcular_status_tag(f_ini, f_fim, f_mont),
-                    'OBS': v_obs
-                }
+                updates = {'SEMANA OBRA': str(sem_obra), 'DATA INIC PROG': f_ini, 'DATA FIM PROG': f_fim, 'DATA MONT': f_mont, 'STATUS': st_atual, 'OBS': v_obs}
                 for col, val in updates.items():
                     if col in cols_map: ws_atual.update_cell(linha, cols_map[col], val)
-                st.success("Dados Salvos!")
+                st.success("Salvo!")
                 st.rerun()
-
-        st.divider()
-        st.dataframe(df_atual, use_container_width=True, hide_index=True)
-
-    elif aba == "📊 CURVA S":
-        # ... (Mantido código de gráficos conforme versões anteriores)
-        st.info("Visualização de progresso Curva S.")
+        
+        st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'STATUS', 'DATA MONT', 'OBS']], use_container_width=True, hide_index=True)
 
     elif aba == "📋 RELATÓRIOS":
-        st.subheader("📋 PROGRAMADO PRODUÇÃO")
-        df_atual['STATUS'] = df_atual.apply(lambda r: calcular_status_tag(r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT','')), axis=1)
+        st.subheader("📊 Painel de Controle")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Total", len(df_atual))
+        c2.metric("Montados", len(df_atual[df_atual['STATUS'] == 'MONTADO']))
+        c3.metric("Programados", len(df_atual[df_atual['STATUS'] == 'PROGRAMADO']))
+        c4.metric("Aguardando", len(df_atual[df_atual['STATUS'] == 'AGUARDANDO PROG']))
+
+        st.divider()
+        st.markdown("### 📋 PROGRAMADO PRODUÇÃO")
+        semanas_existentes = sorted([s for s in df_atual['SEMANA OBRA'].unique() if s != ""], key=int, reverse=True)
+        sem_f = st.selectbox("Filtrar por Semana de Obra:", semanas_existentes if semanas_existentes else ["17"])
         
-        sem_filtro = st.selectbox("Escolha a Semana da Obra:", sorted(df_atual['SEMANA OBRA'].unique(), reverse=True))
-        df_prod = df_atual[(df_atual['STATUS'] == 'PROGRAMADO') & (df_atual['SEMANA OBRA'] == sem_filtro)]
+        df_p = df_atual[(df_atual['STATUS'] == 'PROGRAMADO') & (df_atual['SEMANA OBRA'] == sem_f)]
+        st.dataframe(df_p[['TAG', 'DATA INIC PROG', 'DATA FIM PROG', 'OBS']], use_container_width=True, hide_index=True)
         
-        st.dataframe(df_prod[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'OBS']], use_container_width=True, hide_index=True)
-        
-        if not df_prod.empty:
+        if not df_p.empty:
             buf = BytesIO()
-            with pd.ExcelWriter(buf, engine='xlsxwriter') as writer:
-                df_prod.to_excel(writer, index=False)
-            st.download_button("📥 BAIXAR PROGRAMAÇÃO DA SEMANA", buf.getvalue(), f"PRODUCAO_SEM_{sem_filtro}.xlsx", use_container_width=True)
+            with pd.ExcelWriter(buf, engine='xlsxwriter') as writer: df_p.to_excel(writer, index=False)
+            st.download_button("📥 BAIXAR PROGRAMADO PRODUÇÃO (EXCEL)", buf.getvalue(), f"PROD_SEM_{sem_f}.xlsx", use_container_width=True)
 
     elif aba == "📤 CARGA EM MASSA":
-        st.subheader("Importação de Dados")
-        up = st.file_uploader("Upload Excel", type="xlsx")
-        if up and st.button("PROCESSAR"):
-            # Lógica de carga...
-            st.success("Carga concluída.")
+        st.subheader("📤 Gestão de Dados em Massa")
+        c_m1, c_m2 = st.columns(2)
+        with c_m1:
+            st.info("Baixe o modelo para preenchimento")
+            mod = df_atual[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']].head(5)
+            buf_m = BytesIO()
+            with pd.ExcelWriter(buf_m, engine='xlsxwriter') as writer: mod.to_excel(writer, index=False)
+            st.download_button("📥 Baixar Modelo Excel", buf_m.getvalue(), "modelo_carga.xlsx")
+        
+        with c_m2:
+            st.success("Exportação completa da base")
+            buf_f = BytesIO()
+            with pd.ExcelWriter(buf_f, engine='xlsxwriter') as writer: df_atual.to_excel(writer, index=False)
+            st.download_button("📥 Exportar Base Completa", buf_f.getvalue(), "base_completa.xlsx")
 
-if st.sidebar.button("🚪 SAIR"):
-    st.session_state['logado'] = False
-    st.rerun()
+        st.divider()
+        up = st.file_uploader("Upload de arquivo preenchido:", type="xlsx")
+        if up and st.button("🚀 EXECUTAR CARGA EM MASSA"):
+            df_up = pd.read_excel(up).astype(str).replace('nan', '')
+            prog = st.progress(0)
+            for i, (_, r) in enumerate(df_up.iterrows()):
+                if r['TAG'] in df_atual['TAG'].values:
+                    ln = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
+                    for c in df_up.columns:
+                        if c in cols_map: ws_atual.update_cell(ln, cols_map[c], r[c])
+                prog.progress((i+1)/len(df_up))
+            st.success("Carga Finalizada!")
+            st.rerun()
