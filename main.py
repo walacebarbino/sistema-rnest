@@ -132,7 +132,7 @@ if not df_atual.empty:
         "DOCUMENTO": st.column_config.TextColumn(width="medium")
     }
 
- # --- ABA 1: EDIÇÃO E QUADRO ---
+# --- ABA 1: EDIÇÃO E QUADRO ---
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"📝 Edição por TAG - {disc}")
         
@@ -147,6 +147,7 @@ if not df_atual.empty:
         
         sug_ini, sug_fim = get_dates_from_week(sem_input)
         
+        # FORMULÁRIO DE EDIÇÃO (ORIGINAL)
         with st.form("form_edit_final"):
             st.markdown("##### ✏️ Editar Datas e Status")
             c1, c2, c3, c4 = st.columns(4)
@@ -173,12 +174,12 @@ if not df_atual.empty:
                     if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], str(val))
                 st.success("Salvo com sucesso!"); st.rerun()
 
-        # --- GERENCIAMENTO (CADASTRAR E EXCLUIR) ---
+        # GERENCIAMENTO (CADASTRAR E EXCLUIR)
         st.divider()
         col_adm_add, col_adm_del = st.columns(2)
 
         with col_adm_add:
-            with st.expander("➕ CADASTRAR NOVO TAG", expanded=False):
+            with st.expander("➕ CADASTRAR NOVO TAG"):
                 with st.form("form_novo_cadastro"):
                     n_tag = st.text_input("TAG *")
                     n_desc = st.text_input("DESCRIÇÃO")
@@ -186,7 +187,8 @@ if not df_atual.empty:
                     n_fam = st.text_input("FAMÍLIA")
                     n_item = st.text_input("ITEM")
                     n_qtd = st.text_input("QUANTIDADE")
-                    conf_add = st.checkbox("Confirmo os dados")
+                    conf_add = st.checkbox("Confirmo os dados acima")
+                    
                     if st.form_submit_button("🚀 CADASTRAR"):
                         if n_tag and conf_add:
                             linha_nova = [n_tag, "", "", "", "", "", "AGUARDANDO PROG", disc, n_desc, n_area, "", n_fam, n_item, "", n_qtd, "", ""]
@@ -194,25 +196,29 @@ if not df_atual.empty:
                             st.success(f"TAG {n_tag} cadastrado!"); st.rerun()
 
         with col_adm_del:
-            with st.expander("🗑️ EXCLUIR UM TAG", expanded=False):
-                tag_excluir = st.selectbox("TAG para EXCLUIR:", [""] + sorted(df_atual['TAG'].unique().tolist()))
+            with st.expander("🗑️ EXCLUIR UM TAG"):
+                # Seletor independente para exclusão
+                tag_excluir = st.selectbox("Selecione o TAG para apagar:", [""] + sorted(df_atual['TAG'].unique().tolist()), key="del_box")
                 if tag_excluir:
-                    st.error(f"Excluir: {tag_excluir}")
-                    conf_excluir = st.checkbox("Tenho certeza")
+                    st.error(f"🚨 Excluir permanentemente: {tag_excluir}")
+                    conf_excluir = st.checkbox("Estou ciente da exclusão", key="conf_del")
                     if st.button("🔴 EXCLUIR AGORA", use_container_width=True):
                         if conf_excluir:
-                            cell = ws_atual.find(tag_excluir, in_column=1)
-                            if cell:
-                                ws_atual.delete_rows(cell.row)
-                                st.success("Removido!"); st.rerun()
+                            try:
+                                cell = ws_atual.find(tag_excluir, in_column=1)
+                                if cell:
+                                    ws_atual.delete_rows(cell.row)
+                                    st.success(f"TAG {tag_excluir} removido!"); st.rerun()
+                                else: st.error("Não encontrado.")
+                            except: st.error("Erro na busca.")
 
         st.divider()
-        # --- TABELA DE VISUALIZAÇÃO ---
+        # TABELA COM CÓPIA HABILITADA
         st.dataframe(
             df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], 
             use_container_width=True, 
             hide_index=True,
-            column_config={"TAG": st.column_config.TextColumn("TAG (Copiar)", help="Selecione o texto para copiar")}
+            column_config={"TAG": st.column_config.TextColumn("TAG (Copiar)", width="medium")}
         )
 
         # --- BLOCO 2: GERENCIAMENTO (CADASTRAR E SELECIONAR PARA EXCLUIR) ---
