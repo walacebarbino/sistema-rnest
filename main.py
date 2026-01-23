@@ -103,7 +103,6 @@ if not df_atual.empty:
     # --- ABA 1: EDIÇÃO E QUADRO ---
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"📝 Edição por TAG - {disc}")
-        
         col_edit_top = st.container()
         with col_edit_top:
             c_tag, c_sem = st.columns([2, 1])
@@ -113,9 +112,7 @@ if not df_atual.empty:
             dados_tag = df_atual.iloc[idx_base]
             with c_sem:
                 sem_input = st.text_input("Semana da Obra:", value=dados_tag['SEMANA OBRA'])
-        
         sug_ini, sug_fim = get_dates_from_week(sem_input)
-
         with st.form("form_edit_final"):
             c1, c2, c3, c4 = st.columns(4)
             def conv_dt(val, default):
@@ -178,20 +175,17 @@ if not df_atual.empty:
         sem_f = st.selectbox("Filtrar por Semana:", ["TODAS"] + semanas)
         df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
         if sem_f != "TODAS": df_p = df_p[df_p['SEMANA OBRA'] == sem_f]
-        
         cols_producao = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
         st.dataframe(df_p[cols_producao], use_container_width=True, hide_index=True)
-        
         buf_p = BytesIO(); df_p[cols_producao].to_excel(buf_p, index=False)
         st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", buf_p.getvalue(), f"Programado_{disc}.xlsx")
 
         st.divider()
         st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
-        # AJUSTE 1: MESMAS COLUNAS DE PROGRAMADO + STATUS
-        cols_pendencias = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO', 'STATUS']
+        # AJUSTE: TAG, DESCRIÇÃO, DATA MONT, ÁREA, STATUS e OBS
+        cols_pendencias = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
         df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
         st.dataframe(df_pend[cols_pendencias], use_container_width=True, hide_index=True)
-        
         buf_pe = BytesIO(); df_pend[cols_pendencias].to_excel(buf_pe, index=False)
         st.download_button("📥 EXPORTAR PENDÊNCIAS", buf_pe.getvalue(), f"Pendencias_{disc}.xlsx")
 
@@ -199,8 +193,10 @@ if not df_atual.empty:
         st.markdown("### 📈 AVANÇO SEMANAL (REALIZADO 7 DIAS)")
         df_atual['DT_TEMP'] = pd.to_datetime(df_atual['DATA MONT'], dayfirst=True, errors='coerce')
         df_setec = df_atual[df_atual['DT_TEMP'] >= (datetime.now() - timedelta(days=7))]
-        st.dataframe(df_setec[['TAG', 'DATA MONT', 'OBS']], use_container_width=True, hide_index=True)
-        buf_r = BytesIO(); df_setec.to_excel(buf_r, index=False)
+        # AJUSTE: TAG, DESCRIÇÃO, DATA MONT, ÁREA, STATUS e OBS
+        cols_avanco = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
+        st.dataframe(df_setec[cols_avanco], use_container_width=True, hide_index=True)
+        buf_r = BytesIO(); df_setec[cols_avanco].to_excel(buf_r, index=False)
         st.download_button("📥 EXPORTAR AVANÇO SEMANAL", buf_r.getvalue(), f"Realizado_7_dias_{disc}.xlsx")
 
     # --- ABA 4: CARGA EM MASSA ---
