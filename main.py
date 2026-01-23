@@ -234,54 +234,36 @@ if not df_atual.empty:
         buf_r = BytesIO(); df_setec[cols_av].to_excel(buf_r, index=False)
         st.download_button("📥 EXPORTAR AVANÇO SEMANAL", buf_r.getvalue(), f"Realizado_7_dias_{disc}.xlsx")
 
-   # --- ABA 4: IMPORTAÇÃO (VERSÃO FINAL BLINDADA) ---
-    elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
-        st.subheader("🚀 Sincronização em Massa (Intervalo DADOS)")
-        up = st.file_uploader("Subir Excel", type="xlsx")
-        if up:
-            if st.button("🚀 SINCRONIZAR AGORA"):
-                try:
-                    with st.spinner('Limpando e enviando...'):
-                        # Lê o Excel e já limpa os NaNs na entrada
-                        df_up = pd.read_excel(up, engine='openpyxl').fillna('')
-                        df_up.columns = df_up.columns.str.strip().upper()
-                        
-                        # PUXA APENAS O INTERVALO NOMEADO 'DADOS'
-                        try:
-                            data_mat = ws_atual.get('DADOS')
-                        except:
-                            data_mat = ws_atual.get_all_values()
-                            
-                        sucesso = 0
-                        # Processa a matriz na memória
-                        for _, r in df_up.iterrows():
-                            tag_ex = str(r.get('TAG', '')).strip()
-                            if not tag_ex: continue
-                            
-                            for i, row in enumerate(data_mat[1:]):
-                                if str(row[0]).strip() == tag_ex:
-                                    # Mapeamento forçando STRING para evitar erro de float/nan
-                                    # Ajuste os índices [1, 2, 3...] conforme sua planilha
-                                    if 'SEMANA' in str(df_up.columns): data_mat[i+1][1] = str(r.get('SEMANA OBRA', row[1]))
-                                    if 'INIC' in str(df_up.columns):   data_mat[i+1][2] = str(r.get('DATA INIC PROG', row[2]))
-                                    if 'FIM' in str(df_up.columns):    data_mat[i+1][3] = str(r.get('DATA FIM PROG', row[3]))
-                                    if 'MONT' in str(df_up.columns):   data_mat[i+1][4] = str(r.get('DATA MONT', row[4]))
-                                    if 'OBS' in str(df_up.columns):    data_mat[i+1][6] = str(r.get('OBS', row[6]))
-                                    sucesso += 1
+   def extrair_dados(nome_planilha):
+    try:
+        sh = client.open(nome_planilha)
+        ws = sh.get_worksheet(0)
+        
+        # Tenta buscar pelo nome do intervalo "DADOS"
+        try:
+            data = ws.get('DADOS') 
+        except:
+            data = ws.get_all_values()
 
-                        # AQUI ESTÁ O PULO DO GATO:
-                        # Converte a matriz inteira para string e remove qualquer 'nan' residual
-                        final_mat = [[str(c) if (str(c).lower() != 'nan' and c is not None) else '' for c in lista] for lista in data_mat]
-                        
-                        # Se você usar o intervalo nomeado, ele grava EXATAMENTE onde deve
-                        ws_atual.update('DADOS', final_mat) 
-                        
-                        st.balloons()
-                        st.success(f"✅ Sincronizado! {sucesso} TAGs atualizadas no intervalo DADOS.")
-                        time.sleep(2)
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"Erro Crítico: {e}")
+        if data and len(data) > 1:
+            df = pd.DataFrame(data[1:], columns=data[0])
+            df.columns = df.columns.str.strip()
+            
+            # Colunas que o sistema espera
+            col_obj = ['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
+            for c in col_obj:
+                if c not in df.columns: df[c] = ""
+            
+            # LIMPEZA TOTAL ANTI-ERRO (O que resolve as fotos 5 e 6)
+            for c in df.columns:
+                # Transforma tudo em texto e remove qualquer resquício de 'nan'
+                df[c] = df[c].astype(str).str.strip().replace(['nan', 'None', 'NaT', '-', 'NaN'], '')
+            
+            return df, ws
+        return pd.DataFrame(), None
+    except Exception as e:
+        st.error(f"Erro na leitura: {e}")
+        return pd.DataFrame(), None
         
         with c3:
             st.info("💾 **BASE COMPLETA**")
