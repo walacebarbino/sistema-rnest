@@ -175,33 +175,33 @@ if not df_atual.empty:
     elif aba == "📋 RELATÓRIOS":
         st.subheader(f"📋 Painel de Relatórios - {disc}")
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total", len(df_atual))
+        m1.metric("Total de TAGs", len(df_atual))
         m2.metric("Montados ✅", len(df_atual[df_atual['STATUS']=='MONTADO']))
         m3.metric("Programados 📅", len(df_atual[df_atual['STATUS']=='PROGRAMADO']))
         m4.metric("Aguardando ⏳", len(df_atual[df_atual['STATUS']=='AGUARDANDO PROG']))
         
         st.divider()
         st.markdown("### 📅 PROGRAMADO PRODUÇÃO")
-        df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
-        st.dataframe(df_p[['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']], use_container_width=True, hide_index=True)
+        df_prog = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
+        st.dataframe(df_prog[['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']], use_container_width=True, hide_index=True)
         
         st.divider()
         st.markdown("### 🚩 LISTA DE PENDÊNCIAS")
         df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
-        st.dataframe(df_pend[['TAG', 'DESCRIÇÃO', 'STATUS', 'OBS']], use_container_width=True, hide_index=True)
+        st.dataframe(df_pend[['TAG', 'DESCRIÇÃO', 'STATUS', 'OBS']], use_container_width=True, hide_index=True, column_config=cfg_rel)
 
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
-        st.subheader("📤 Sincronização e Base")
+        st.subheader("📤 Sincronização e Gestão de Base")
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.info("📄 **MODELO**")
+            st.info("📄 **MODELO DE IMPORTAÇÃO**")
             mod = df_atual[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']].head(5)
             b_m = BytesIO(); mod.to_excel(b_m, index=False)
-            st.download_button("📥 BAIXAR MODELO", b_m.getvalue(), "modelo.xlsx", use_container_width=True)
+            st.download_button("📥 BAIXAR MODELO", b_m.getvalue(), "modelo_importacao.xlsx", use_container_width=True)
         
         with c2:
-            st.info("🚀 **IMPORTAR EXCEL**")
-            up = st.file_uploader("Upload:", type="xlsx", label_visibility="collapsed")
+            st.info("🚀 **IMPORTAR ATUALIZAÇÕES**")
+            up = st.file_uploader("Upload Excel:", type="xlsx", label_visibility="collapsed")
             if up:
                 if st.button("🚀 SINCRONIZAR AGORA", use_container_width=True):
                     try:
@@ -230,6 +230,6 @@ if not df_atual.empty:
                     except Exception as e: st.error(f"Erro: {e}")
 
         with c3:
-            st.info("💾 **BASE COMPLETA**")
+            st.info("💾 **EXPORTAR BASE COMPLETA**")
             b_f = BytesIO(); df_atual.to_excel(b_f, index=False)
-            st.download_button("📥 EXPORTAR TUDO", b_f.getvalue(), f"Base_{disc}.xlsx", use_container_width=True)
+            st.download_button("📥 EXPORTAR TUDO (XLSX)", b_f.getvalue(), f"Base_GMONT_{disc}.xlsx", use_container_width=True)
