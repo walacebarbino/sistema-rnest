@@ -111,6 +111,14 @@ if not df_atual.empty:
     df_atual['STATUS'] = df_atual.apply(lambda r: calcular_status_tag(r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT','')), axis=1)
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
 
+    # --- CONFIGURAÇÃO DE LARGURA PADRÃO ---
+    cfg_rel = {
+        "TAG": st.column_config.TextColumn(width="medium"),
+        "DESCRIÇÃO": st.column_config.TextColumn(width="large"),
+        "OBS": st.column_config.TextColumn(width="large"),
+        "DOCUMENTO": st.column_config.TextColumn(width="medium")
+    }
+
     # --- ABA 1: EDIÇÃO E QUADRO ---
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"📝 Edição por TAG - {disc}")
@@ -146,8 +154,7 @@ if not df_atual.empty:
         st.divider()
         st.markdown(f"### 📋 QUADRO GERAL - {disc}")
         st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'STATUS', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']], 
-                     use_container_width=True, hide_index=True,
-                     column_config={"TAG": st.column_config.TextColumn(width="medium"), "OBS": st.column_config.TextColumn(width="large")})
+                     use_container_width=True, hide_index=True, column_config=cfg_rel)
 
     # --- ABA 2: CURVA S ---
     elif aba == "📊 CURVA S":
@@ -182,32 +189,33 @@ if not df_atual.empty:
         m1.metric("Total", len(df_atual)); m2.metric("Montados ✅", len(df_atual[df_atual['STATUS']=='MONTADO']))
         m3.metric("Programados 📅", len(df_atual[df_atual['STATUS']=='PROGRAMADO'])); m4.metric("Aguardando ⏳", len(df_atual[df_atual['STATUS']=='AGUARDANDO PROG']))
         
-        # Configuração padrão de largura para os relatórios
-        cfg_rel = {
-            "TAG": st.column_config.TextColumn(width="medium"),
-            "DESCRIÇÃO": st.column_config.TextColumn(width="large"),
-            "OBS": st.column_config.TextColumn(width="large"),
-            "DOCUMENTO": st.column_config.TextColumn(width="medium")
-        }
-
         st.divider()
         st.markdown("### 📅 PROGRAMADO PRODUÇÃO")
         semanas = sorted([s for s in df_atual['SEMANA OBRA'].unique() if str(s).isdigit()], key=int, reverse=True)
         sem_f = st.selectbox("Filtrar por Semana:", ["TODAS"] + semanas)
         df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
         if sem_f != "TODAS": df_p = df_p[df_p['SEMANA OBRA'] == sem_f]
-        st.dataframe(df_p[['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']], use_container_width=True, hide_index=True, column_config=cfg_rel)
+        cols_p = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
+        st.dataframe(df_p[cols_p], use_container_width=True, hide_index=True, column_config=cfg_rel)
+        buf_p = BytesIO(); df_p[cols_p].to_excel(buf_p, index=False)
+        st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", buf_p.getvalue(), f"Programado_{disc}.xlsx")
 
         st.divider()
         st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
         df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
-        st.dataframe(df_pend[['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']], use_container_width=True, hide_index=True, column_config=cfg_rel)
+        cols_pend = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
+        st.dataframe(df_pend[cols_pend], use_container_width=True, hide_index=True, column_config=cfg_rel)
+        buf_pe = BytesIO(); df_pend[cols_pend].to_excel(buf_pe, index=False)
+        st.download_button("📥 EXPORTAR PENDÊNCIAS", buf_pe.getvalue(), f"Pendencias_{disc}.xlsx")
 
         st.divider()
         st.markdown("### 📈 AVANÇO SEMANAL (REALIZADO 7 DIAS)")
         df_atual['DT_TEMP'] = pd.to_datetime(df_atual['DATA MONT'], dayfirst=True, errors='coerce')
         df_setec = df_atual[df_atual['DT_TEMP'] >= (datetime.now() - timedelta(days=7))]
-        st.dataframe(df_setec[['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']], use_container_width=True, hide_index=True, column_config=cfg_rel)
+        cols_av = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
+        st.dataframe(df_setec[cols_av], use_container_width=True, hide_index=True, column_config=cfg_rel)
+        buf_r = BytesIO(); df_setec[cols_av].to_excel(buf_r, index=False)
+        st.download_button("📥 EXPORTAR AVANÇO SEMANAL", buf_r.getvalue(), f"Realizado_7_dias_{disc}.xlsx")
 
     # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
