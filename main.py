@@ -13,31 +13,7 @@ from datetime import datetime, timedelta
 st.set_page_config(page_title="SISTEMA G-MONT", layout="wide")
 DATA_INICIO_OBRA = datetime(2025, 9, 29) 
 
-# --- CSS PARA LOGO "SANGRE" NA SIDEBAR ---
-st.markdown("""
-    <style>
-    /* 1. Remove o espaço no topo e nas laterais do bloco de imagem na sidebar */
-    [data-testid="stSidebar"] [data-testid="stImage"] {
-        padding: 0px !important;
-        margin-top: -60px !important; /* Puxa a logo para o topo absoluto */
-        margin-left: -20px !important; /* Compensa o padding padrão do Streamlit */
-        margin-right: -20px !important;
-        width: calc(100% + 40px) !important; /* Estica a imagem para compensar os lados */
-    }
 
-    /* 2. Garante que a imagem ocupe toda a largura disponível */
-    [data-testid="stSidebar"] [data-testid="stImage"] img {
-        width: 100% !important;
-        height: auto !important;
-        border-radius: 0px !important;
-    }
-
-    /* Padronização de inputs e fontes (Mantido) */
-    [data-testid="column"] { padding-left: 5px !important; padding-right: 5px !important; }
-    .stDateInput div, .stTextInput div, .stNumberInput div, .stSelectbox div { height: 45px !important; }
-    label p { font-weight: bold !important; font-size: 14px !important; }
-    </style>
-    """, unsafe_allow_html=True)
 
 # --- CONTROLE DE ACESSO ---
 if 'logado' not in st.session_state: st.session_state['logado'] = False
