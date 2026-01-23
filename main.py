@@ -91,10 +91,10 @@ def calcular_status_tag(d_i, d_f, d_m):
     if tem(d_i) or tem(d_f): return "PROGRAMADO"
     return "AGUARDANDO PROG"
 
-# --- CARREGAMENTO ---
+# --- CARREGAMENTO DAS DISCIPLINAS ---
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
-df_est, ws_est = extrair_dados("BD_ESTR")
+df_est, ws_est = extrair_dados("BD_ESTR") # <--- Nova planilha: BD_ESTR
 
 # --- SIDEBAR ---
 try:
@@ -111,7 +111,7 @@ if st.sidebar.button("🚪 SAIR DO SISTEMA", use_container_width=True):
     st.session_state['logado'] = False
     st.rerun()
 
-# --- DIRECIONAMENTO DE DADOS ---
+# --- DIRECIONAMENTO DE DADOS (FORMA EXPLÍCITA) ---
 if disc == "ELÉTRICA":
     df_atual, ws_atual = df_ele, ws_ele
 elif disc == "INSTRUMENTAÇÃO":
@@ -119,6 +119,7 @@ elif disc == "INSTRUMENTAÇÃO":
 elif disc == "ESTRUTURA":
     df_atual, ws_atual = df_est, ws_est
 else:
+    # Caso de segurança: se algo der errado, carrega um DF vazio
     df_atual, ws_atual = pd.DataFrame(), None
 
 if not df_atual.empty:
@@ -132,13 +133,12 @@ if not df_atual.empty:
         "DOCUMENTO": st.column_config.TextColumn(width="medium")
     }
 
-# --- ABA 1: EDIÇÃO E QUADRO ---
+    # --- ABA 1: EDIÇÃO E QUADRO ---
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"📝 Edição por TAG - {disc}")
-        
         c_tag, c_sem = st.columns([2, 1])
         with c_tag:
-            tag_sel = st.selectbox("Selecione o TAG para EDITAR:", sorted(df_atual['TAG'].unique()))
+            tag_sel = st.selectbox("Selecione o TAG:", sorted(df_atual['TAG'].unique()))
         
         idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
         dados_tag = df_atual.iloc[idx_base]
@@ -147,9 +147,7 @@ if not df_atual.empty:
         
         sug_ini, sug_fim = get_dates_from_week(sem_input)
         
-        # FORMULÁRIO DE EDIÇÃO (ORIGINAL)
         with st.form("form_edit_final"):
-            st.markdown("##### ✏️ Editar Datas e Status")
             c1, c2, c3, c4 = st.columns(4)
             def conv_dt(val, default):
                 try: return datetime.strptime(str(val), "%d/%m/%Y").date()
@@ -161,9 +159,10 @@ if not df_atual.empty:
             v_mont = c4.date_input("Data Montagem", value=conv_dt(dados_tag['DATA MONT'], None), format="DD/MM/YYYY")
             
             st_atual = calcular_status_tag(v_ini, v_fim, v_mont)
+            st.info(f"Status Atualizado: **{st_atual}**")
             v_obs = st.text_input("Observações:", value=dados_tag['OBS'])
             
-            if st.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
+            if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
                 f_prev = v_prev.strftime("%d/%m/%Y") if v_prev else ""
                 f_ini = v_ini.strftime("%d/%m/%Y") if v_ini else ""
                 f_fim = v_fim.strftime("%d/%m/%Y") if v_fim else ""
@@ -174,100 +173,7 @@ if not df_atual.empty:
                     if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], str(val))
                 st.success("Salvo com sucesso!"); st.rerun()
 
-        # GERENCIAMENTO (CADASTRAR E EXCLUIR)
         st.divider()
-        col_adm_add, col_adm_del = st.columns(2)
-
-        with col_adm_add:
-            with st.expander("➕ CADASTRAR NOVO TAG"):
-                with st.form("form_novo_cadastro"):
-                    n_tag = st.text_input("TAG *")
-                    n_desc = st.text_input("DESCRIÇÃO")
-                    n_area = st.text_input("ÁREA")
-                    n_fam = st.text_input("FAMÍLIA")
-                    n_item = st.text_input("ITEM")
-                    n_qtd = st.text_input("QUANTIDADE")
-                    conf_add = st.checkbox("Confirmo os dados acima")
-                    
-                    if st.form_submit_button("🚀 CADASTRAR"):
-                        if n_tag and conf_add:
-                            linha_nova = [n_tag, "", "", "", "", "", "AGUARDANDO PROG", disc, n_desc, n_area, "", n_fam, n_item, "", n_qtd, "", ""]
-                            ws_atual.append_row(linha_nova)
-                            st.success(f"TAG {n_tag} cadastrado!"); st.rerun()
-
-        with col_adm_del:
-            with st.expander("🗑️ EXCLUIR UM TAG"):
-                # Seletor independente para exclusão
-                tag_excluir = st.selectbox("Selecione o TAG para apagar:", [""] + sorted(df_atual['TAG'].unique().tolist()), key="del_box")
-                if tag_excluir:
-                    st.error(f"🚨 Excluir permanentemente: {tag_excluir}")
-                    conf_excluir = st.checkbox("Estou ciente da exclusão", key="conf_del")
-                    if st.button("🔴 EXCLUIR AGORA", use_container_width=True):
-                        if conf_excluir:
-                            try:
-                                cell = ws_atual.find(tag_excluir, in_column=1)
-                                if cell:
-                                    ws_atual.delete_rows(cell.row)
-                                    st.success(f"TAG {tag_excluir} removido!"); st.rerun()
-                                else: st.error("Não encontrado.")
-                            except: st.error("Erro na busca.")
-
-        st.divider()
-        # TABELA COM CÓPIA HABILITADA
-        st.dataframe(
-            df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], 
-            use_container_width=True, 
-            hide_index=True,
-            column_config={"TAG": st.column_config.TextColumn("TAG (Copiar)", width="medium")}
-        )
-
-        # --- BLOCO 2: GERENCIAMENTO (CADASTRAR E SELECIONAR PARA EXCLUIR) ---
-        st.divider()
-        col_adm_add, col_adm_del = st.columns(2)
-
-        with col_adm_add:
-            with st.expander("➕ CADASTRAR NOVO TAG", expanded=False):
-                with st.form("form_novo_cadastro"):
-                    st.markdown("### Inserir Informações")
-                    n_tag = st.text_input("TAG *")
-                    n_desc = st.text_input("DESCRIÇÃO")
-                    n_area = st.text_input("ÁREA")
-                    n_fam = st.text_input("FAMÍLIA")
-                    n_item = st.text_input("ITEM")
-                    n_qtd = st.text_input("QUANTIDADE")
-                    
-                    st.warning("O novo TAG será inserido com status 'AGUARDANDO PROG'")
-                    confirmar_add = st.checkbox("Confirmo que os dados estão corretos")
-                    
-                    if st.form_submit_button("🚀 CADASTRAR NOVO TAG"):
-                        if n_tag and confirmar_add:
-                            # Ordem das colunas: TAG, SEMANA, INIC, FIM, PREV, MONT, STATUS, DISC, DESC, AREA, DOC, FAM, ITEM, UNID, QTD, OBS, DOC_REF
-                            linha_nova = [n_tag, "", "", "", "", "", "AGUARDANDO PROG", disc, n_desc, n_area, "", n_fam, n_item, "", n_qtd, "", ""]
-                            ws_atual.append_row(linha_nova)
-                            st.success(f"TAG {n_tag} cadastrado!"); st.rerun()
-                        else:
-                            st.error("Preencha o TAG e marque a confirmação.")
-
-        with col_adm_del:
-            with st.expander("🗑️ EXCLUIR UM TAG", expanded=False):
-                # Aqui você seleciona especificamente o que quer apagar
-                tag_excluir = st.selectbox("Selecione o TAG que deseja EXCLUIR:", [""] + sorted(df_atual['TAG'].unique()))
-                if tag_excluir:
-                    st.error(f"🚨 ATENÇÃO: Você vai apagar o TAG {tag_excluir}")
-                    conf_excluir = st.checkbox(f"Eu tenho certeza que desejo excluir o {tag_excluir}")
-                    if st.button("🔴 EXCLUIR AGORA", use_container_width=True):
-                        if conf_excluir:
-                            try:
-                                celula_del = ws_atual.find(tag_excluir)
-                                ws_atual.delete_rows(celula_del.row)
-                                st.success("TAG Removido com sucesso!"); st.rerun()
-                            except:
-                                st.error("Erro ao localizar na planilha.")
-                        else:
-                            st.warning("Marque a confirmação para poder excluir.")
-
-        st.divider()
-        # --- BLOCO 3: TABELA DE VISUALIZAÇÃO ---
         col_dates_cfg = {
             "PREVISTO": st.column_config.DateColumn(format="DD/MM/YYYY"),
             "DATA INIC PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
@@ -277,8 +183,7 @@ if not df_atual.empty:
         st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], 
                      use_container_width=True, hide_index=True, column_config={**cfg_rel, **col_dates_cfg})
 
-    
-    # --- ABA 2: CURVA S (Mantenha este elif alinhado com o if da Aba 1) ---
+    # --- ABA 2: CURVA S ---
     elif aba == "📊 CURVA S":
         st.subheader(f"📊 Curva S e Avanço - {disc}")
         total_t = len(df_atual)
