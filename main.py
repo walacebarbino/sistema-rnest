@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 from google.oauth2.service_account import Credentials
@@ -17,44 +18,23 @@ st.markdown("""
     <style>
     [data-testid="column"] { padding-left: 5px !important; padding-right: 5px !important; }
     .stDateInput div, .stTextInput div, .stNumberInput div, .stSelectbox div { height: 45px !important; }
-    
-    /* Centraliza a Logo na Sidebar */
-    [data-testid="stSidebar"] [data-testid="stImage"] {
-        text-align: center;
-        display: block;
-        margin-left: auto;
-        margin-right: auto;
-    }
-    [data-testid="stSidebarNav"] { padding-top: 20px; }
-    
-    /* Centraliza a Logo no Login */
-    .stImage > img {
-        display: block;
-        margin-left: auto;
-        margin-right: auto;
-    }
+    div[data-testid="stForm"] > div { align-items: center; }
+    label p { font-weight: bold !important; font-size: 14px !important; min-height: 25px; margin-bottom: 5px !important; }
+    input:disabled { background-color: #1e293b !important; color: #60a5fa !important; opacity: 1 !important; }
+    .stFileUploader { margin-top: -15px; }
+    [data-testid="stSidebar"] [data-testid="stImage"] { text-align: center; display: block; margin-left: auto; margin-right: auto; }
     </style>
     """, unsafe_allow_html=True)
-
-/* Centraliza a imagem na sidebar */
-    [data-testid="stSidebarNav"] { padding-top: 20px; }
-    [data-testid="stSidebar"] img {
-        display: block;
-        margin-left: auto;
-        margin-right: auto;
-    }
 
 # --- CONTROLE DE ACESSO ---
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 
 def tela_login():
-    # Cria colunas para centralizar o formulário
-    c1, c2, c3 = st.columns([1, 1, 1])
-    with c2:
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
         try:
-            # Adiciona a logo acima do PIN
-            st.image("LOGO2.png", width=180)
+            st.image("LOGO2.png", width=200) # Exibe a logo centralizada
         except:
             pass
         st.subheader("🔐 ACESSO RESTRITO G-MONT")
@@ -63,8 +43,7 @@ def tela_login():
             if pin == "1234":
                 st.session_state['logado'] = True
                 st.rerun()
-            else:
-                st.error("PIN Incorreto.")
+            else: st.error("PIN Incorreto.")
     st.stop()
 
 if not st.session_state['logado']: tela_login()
@@ -117,14 +96,11 @@ def calcular_status_tag(d_i, d_f, d_m):
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
-# --- LOGO NA SIDEBAR (Centralizada) ---
-with st.sidebar:
-    c_side1, c_side2, c_side3 = st.columns([1, 3, 1])
-    with c_side2:
-        try:
-            st.image("LOGO2.png", width=120)
-        except:
-            st.markdown("### G-MONT")
+# --- LOGO ---
+try:
+    st.sidebar.image("LOGO2.png", width=120)
+except:
+    st.sidebar.markdown("### G-MONT")
 
 st.sidebar.subheader("MENU G-MONT")
 disc = st.sidebar.selectbox("DISCIPLINA:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
