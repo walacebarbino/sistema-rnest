@@ -101,6 +101,12 @@ st.sidebar.subheader("MENU G-MONT")
 disc = st.sidebar.selectbox("DISCIPLINA:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
 aba = st.sidebar.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 EXPORTAÇÃO E IMPORTAÇÕES"])
 
+# --- BOTÃO DE LOGOUT NO SIDEBAR ---
+st.sidebar.divider()
+if st.sidebar.button("🚪 SAIR DO SISTEMA", use_container_width=True):
+    st.session_state['logado'] = False
+    st.rerun()
+
 df_atual = df_ele if disc == "ELÉTRICA" else df_ins
 ws_atual = ws_ele if disc == "ELÉTRICA" else ws_ins
 
