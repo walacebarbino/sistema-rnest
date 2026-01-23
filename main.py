@@ -21,13 +21,7 @@ st.markdown("""
     label p { font-weight: bold !important; font-size: 14px !important; min-height: 25px; margin-bottom: 5px !important; }
     input:disabled { background-color: #1e293b !important; color: #60a5fa !important; opacity: 1 !important; }
     .stFileUploader { margin-top: -15px; }
-    /* Centralizar imagem na sidebar */
-    [data-testid="stSidebar"] [data-testid="stImage"] {
-        text-align: center;
-        display: block;
-        margin-left: auto;
-        margin-right: auto;
-    }
+    [data-testid="stSidebar"] [data-testid="stImage"] { text-align: center; display: block; margin-left: auto; margin-right: auto; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -97,7 +91,7 @@ def calcular_status_tag(d_i, d_f, d_m):
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
-# --- LOGO (REDUZIDA) ---
+# --- LOGO ---
 try:
     st.sidebar.image("LOGO2.png", width=120)
 except:
@@ -151,7 +145,9 @@ if not df_atual.empty:
                 st.success("Salvo!"); st.rerun()
         st.divider()
         st.markdown(f"### 📋 QUADRO GERAL - {disc}")
-        st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'STATUS', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']], use_container_width=True, hide_index=True)
+        st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'STATUS', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']], 
+                     use_container_width=True, hide_index=True,
+                     column_config={"TAG": st.column_config.TextColumn(width="medium"), "OBS": st.column_config.TextColumn(width="large")})
 
     # --- ABA 2: CURVA S ---
     elif aba == "📊 CURVA S":
@@ -186,33 +182,32 @@ if not df_atual.empty:
         m1.metric("Total", len(df_atual)); m2.metric("Montados ✅", len(df_atual[df_atual['STATUS']=='MONTADO']))
         m3.metric("Programados 📅", len(df_atual[df_atual['STATUS']=='PROGRAMADO'])); m4.metric("Aguardando ⏳", len(df_atual[df_atual['STATUS']=='AGUARDANDO PROG']))
         
+        # Configuração padrão de largura para os relatórios
+        cfg_rel = {
+            "TAG": st.column_config.TextColumn(width="medium"),
+            "DESCRIÇÃO": st.column_config.TextColumn(width="large"),
+            "OBS": st.column_config.TextColumn(width="large"),
+            "DOCUMENTO": st.column_config.TextColumn(width="medium")
+        }
+
         st.divider()
         st.markdown("### 📅 PROGRAMADO PRODUÇÃO")
         semanas = sorted([s for s in df_atual['SEMANA OBRA'].unique() if str(s).isdigit()], key=int, reverse=True)
         sem_f = st.selectbox("Filtrar por Semana:", ["TODAS"] + semanas)
         df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
         if sem_f != "TODAS": df_p = df_p[df_p['SEMANA OBRA'] == sem_f]
-        cols_producao = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
-        st.dataframe(df_p[cols_producao], use_container_width=True, hide_index=True)
-        buf_p = BytesIO(); df_p[cols_producao].to_excel(buf_p, index=False)
-        st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", buf_p.getvalue(), f"Programado_{disc}.xlsx")
+        st.dataframe(df_p[['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']], use_container_width=True, hide_index=True, column_config=cfg_rel)
 
         st.divider()
         st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
-        cols_pendencias = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
         df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
-        st.dataframe(df_pend[cols_pendencias], use_container_width=True, hide_index=True)
-        buf_pe = BytesIO(); df_pend[cols_pendencias].to_excel(buf_pe, index=False)
-        st.download_button("📥 EXPORTAR PENDÊNCIAS", buf_pe.getvalue(), f"Pendencias_{disc}.xlsx")
+        st.dataframe(df_pend[['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']], use_container_width=True, hide_index=True, column_config=cfg_rel)
 
         st.divider()
         st.markdown("### 📈 AVANÇO SEMANAL (REALIZADO 7 DIAS)")
         df_atual['DT_TEMP'] = pd.to_datetime(df_atual['DATA MONT'], dayfirst=True, errors='coerce')
         df_setec = df_atual[df_atual['DT_TEMP'] >= (datetime.now() - timedelta(days=7))]
-        cols_avanco = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
-        st.dataframe(df_setec[cols_avanco], use_container_width=True, hide_index=True)
-        buf_r = BytesIO(); df_setec[cols_avanco].to_excel(buf_r, index=False)
-        st.download_button("📥 EXPORTAR AVANÇO SEMANAL", buf_r.getvalue(), f"Realizado_7_dias_{disc}.xlsx")
+        st.dataframe(df_setec[['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']], use_container_width=True, hide_index=True, column_config=cfg_rel)
 
     # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
@@ -226,15 +221,14 @@ if not df_atual.empty:
         with c2:
             st.info("🚀 **IMPORTAÇÃO**")
             up = st.file_uploader("Upload Excel:", type="xlsx", label_visibility="collapsed")
-            if up:
-                if st.button("🚀 IMPORTAR DADOS", use_container_width=True):
-                    df_up = pd.read_excel(up).astype(str).replace('nan', '')
-                    for _, r in df_up.iterrows():
-                        if r['TAG'] in df_atual['TAG'].values:
-                            ln = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
-                            for c in df_up.columns:
-                                if c in cols_map: ws_atual.update_cell(ln, cols_map[c], r[c])
-                    st.success("Dados Atualizados!"); st.rerun()
+            if up and st.button("🚀 IMPORTAR DADOS", use_container_width=True):
+                df_up = pd.read_excel(up).astype(str).replace('nan', '')
+                for _, r in df_up.iterrows():
+                    if r['TAG'] in df_atual['TAG'].values:
+                        ln = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
+                        for c in df_up.columns:
+                            if c in cols_map: ws_atual.update_cell(ln, cols_map[c], r[c])
+                st.success("Dados Atualizados!"); st.rerun()
         with c3:
             st.info("💾 **BASE COMPLETA**")
             b_f = BytesIO(); df_atual.to_excel(b_f, index=False)
