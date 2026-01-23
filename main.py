@@ -4,7 +4,6 @@ from google.oauth2.service_account import Credentials
 import gspread
 import base64
 import json
-import plotly.express as px
 import plotly.graph_objects as go
 from io import BytesIO
 from datetime import datetime, timedelta
@@ -100,14 +99,21 @@ if not df_atual.empty:
     df_atual['STATUS'] = df_atual.apply(lambda r: calcular_status_tag(r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT','')), axis=1)
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
 
-    # --- ABA 1: EDIÇÃO ---
+    # --- ABA 1: EDIÇÃO (LAYOUT AJUSTADO: TAG AO LADO DE SEMANA) ---
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"📝 Edição por TAG - {disc}")
-        tag_sel = st.selectbox("Selecione o TAG:", sorted(df_atual['TAG'].unique()))
+        
+        # Colunas para TAG e SEMANA LADO A LADO
+        c_tag, c_sem = st.columns([2, 1])
+        with c_tag:
+            tag_sel = st.selectbox("Selecione o TAG:", sorted(df_atual['TAG'].unique()))
+        
         idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
         dados_tag = df_atual.iloc[idx_base]
-
-        sem_input = st.text_input("SEMANA DA OBRA (Vazio para desprogramar):", value=dados_tag['SEMANA OBRA'])
+        
+        with c_sem:
+            sem_input = st.text_input("Semana da Obra:", value=dados_tag['SEMANA OBRA'])
+        
         sug_ini, sug_fim = get_dates_from_week(sem_input)
 
         with st.form("form_edit_final"):
@@ -133,47 +139,48 @@ if not df_atual.empty:
                     if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], val)
                 st.success("Salvo!"); st.rerun()
 
-    # --- ABA 2: CURVA S E AVANÇO % (SOMENTE DA DISCIPLINA ATUAL) ---
+    # --- ABA 2: CURVA S (TRÊS LINHAS: PREVISTO, PROGRAMADO, REALIZADO) ---
     elif aba == "📊 CURVA S":
-        st.subheader(f"📊 Avanço Físico - {disc}")
+        st.subheader(f"📊 Curva S e Avanço - {disc}")
         
-        # Cálculo de Porcentagem
-        total_tag = len(df_atual)
-        concluidos = len(df_atual[df_atual['STATUS'] == 'MONTADO'])
-        progresso = (concluidos / total_tag * 100) if total_tag > 0 else 0
-        
-        c_p1, c_p2 = st.columns([1, 3])
-        c_p1.metric("Progresso Real", f"{progresso:.2f}%")
-        c_p2.progress(progresso / 100)
+        # Avanço %
+        total_t = len(df_atual)
+        montados = len(df_atual[df_atual['STATUS'] == 'MONTADO'])
+        per_prog = (montados / total_t * 100) if total_t > 0 else 0
+        st.metric("Avanço da Disciplina", f"{per_prog:.2f}%")
+        st.progress(per_prog / 100)
 
-        def gerar_curva(df):
+        def gerar_curva_completa(df):
             df_c = df.copy()
             df_c['DT_REAL'] = pd.to_datetime(df_c['DATA MONT'], dayfirst=True, errors='coerce')
-            df_c['DT_PLAN'] = pd.to_datetime(df_c['DATA FIM PROG'], dayfirst=True, errors='coerce')
+            df_c['DT_PROG'] = pd.to_datetime(df_c['DATA FIM PROG'], dayfirst=True, errors='coerce')
             
-            realizado = df_c.dropna(subset=['DT_REAL']).sort_values('DT_REAL')
-            planejado = df_c.dropna(subset=['DT_PLAN']).sort_values('DT_PLAN')
-            
-            if planejado.empty and realizado.empty: return None
+            # Simulando Previsto (Baseado em uma data meta linear se não houver coluna específica)
+            real = df_c.dropna(subset=['DT_REAL']).sort_values('DT_REAL')
+            prog = df_c.dropna(subset=['DT_PROG']).sort_values('DT_PROG')
             
             fig = go.Figure()
-            if not planejado.empty:
-                planejado['Acumulado'] = range(1, len(planejado) + 1)
-                fig.add_trace(go.Scatter(x=planejado['DT_PLAN'], y=planejado['Acumulado'], mode='lines', name='Previsto', line=dict(color='orange', dash='dash')))
-            if not realizado.empty:
-                realizado['Acumulado'] = range(1, len(realizado) + 1)
-                fig.add_trace(go.Scatter(x=realizado['DT_REAL'], y=realizado['Acumulado'], mode='lines+markers', name='Realizado', line=dict(color='cyan')))
+            if not prog.empty:
+                prog['Acumulado'] = range(1, len(prog) + 1)
+                fig.add_trace(go.Scatter(x=prog['DT_PROG'], y=prog['Acumulado'], name='Programado', line=dict(color='yellow', width=3)))
             
-            fig.update_layout(title=f"Curva S Acumulada - {disc}", template="plotly_dark")
+            if not real.empty:
+                real['Acumulado'] = range(1, len(real) + 1)
+                fig.add_trace(go.Scatter(x=real['DT_REAL'], y=real['Acumulado'], name='Realizado', line=dict(color='cyan', width=3)))
+            
+            # Linha de Base (Previsto Teórico)
+            if not prog.empty:
+                d_ini, d_fim = prog['DT_PROG'].min(), prog['DT_PROG'].max()
+                fig.add_trace(go.Scatter(x=[d_ini, d_fim], y=[0, total_t], name='Previsto (Base)', line=dict(color='gray', dash='dot')))
+
+            fig.update_layout(title="Curva S: Previsto x Programado x Realizado", template="plotly_dark")
             return fig
 
-        grafico = gerar_curva(df_atual)
-        if grafico: st.plotly_chart(grafico, use_container_width=True)
-        else: st.warning("Sem datas para gerar a curva.")
+        st.plotly_chart(gerar_curva_completa(df_atual), use_container_width=True)
 
-    # --- ABA 3: RELATÓRIOS (COM TODOS OS BOTÕES DE EXPORTAÇÃO) ---
+    # --- ABA 3: RELATÓRIOS (PENDÊNCIAS E EXPORTAÇÕES) ---
     elif aba == "📋 RELATÓRIOS":
-        st.subheader(f"📋 Painel de Controle - {disc}")
+        st.subheader(f"📋 Relatórios - {disc}")
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total", len(df_atual))
         m2.metric("Montados ✅", len(df_atual[df_atual['STATUS']=='MONTADO']))
@@ -181,44 +188,22 @@ if not df_atual.empty:
         m4.metric("Aguardando ⏳", len(df_atual[df_atual['STATUS']=='AGUARDANDO PROG']))
 
         st.divider()
-        st.markdown("### 📋 PROGRAMADO PRODUÇÃO")
-        semanas = sorted([s for s in df_atual['SEMANA OBRA'].unique() if str(s).isdigit()], key=int, reverse=True)
-        sem_f = st.selectbox("Filtrar por Semana:", ["TODAS"] + semanas)
-        df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
-        if sem_f != "TODAS": df_p = df_p[df_p['SEMANA OBRA'] == sem_f]
-        st.dataframe(df_p[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'OBS']], use_container_width=True, hide_index=True)
-        
-        buf_p = BytesIO(); df_p.to_excel(buf_p, index=False)
-        st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", buf_p.getvalue(), f"Programado_{disc}.xlsx")
-
-        st.divider()
         st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
         df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
         st.dataframe(df_pend[['TAG', 'STATUS', 'ÁREA', 'OBS']], use_container_width=True, hide_index=True)
         
-        buf_pe = BytesIO(); df_pend.to_excel(buf_pe, index=False)
-        st.download_button("📥 EXPORTAR PENDÊNCIAS", buf_pe.getvalue(), f"Pendencias_{disc}.xlsx")
-
-        st.divider()
-        st.markdown("### 📈 REALIZADO (ÚLTIMOS 7 DIAS)")
-        df_atual['DT_TEMP'] = pd.to_datetime(df_atual['DATA MONT'], dayfirst=True, errors='coerce')
-        df_setec = df_atual[df_atual['DT_TEMP'] >= (datetime.now() - timedelta(days=7))]
-        st.dataframe(df_setec[['TAG', 'DATA MONT', 'OBS']], use_container_width=True, hide_index=True)
-        
-        buf_r = BytesIO(); df_setec.to_excel(buf_r, index=False)
-        st.download_button("📥 EXPORTAR REALIZADO SEMANAL", buf_r.getvalue(), f"Realizado_Semanal_{disc}.xlsx")
+        buf_p = BytesIO(); df_pend.to_excel(buf_p, index=False)
+        st.download_button("📥 EXPORTAR PENDÊNCIAS", buf_p.getvalue(), f"Pendencias_{disc}.xlsx")
 
     # --- ABA 4: CARGA EM MASSA ---
     elif aba == "📤 CARGA EM MASSA":
-        st.subheader(f"📤 Gestão de Dados - {disc}")
-        c_e1, c_e2 = st.columns(2)
-        with c_e1:
-            st.info("Modelo para preenchimento")
+        st.subheader(f"📤 Carga em Massa - {disc}")
+        c_m1, c_m2 = st.columns(2)
+        with c_m1:
             mod = df_atual[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']].head(5)
-            buf_m = BytesIO(); mod.to_excel(buf_m, index=False); st.download_button("📥 Baixar Modelo", buf_m.getvalue(), "modelo.xlsx")
-        with c_e2:
-            st.success("Exportação Completa")
-            buf_f = BytesIO(); df_atual.to_excel(buf_f, index=False); st.download_button("📥 Exportar Tudo", buf_f.getvalue(), "base_completa.xlsx")
+            b_m = BytesIO(); mod.to_excel(b_m, index=False); st.download_button("📥 Baixar Modelo", b_m.getvalue(), "modelo.xlsx")
+        with c_m2:
+            b_f = BytesIO(); df_atual.to_excel(b_f, index=False); st.download_button("📥 Exportar Base Completa", b_f.getvalue(), "base.xlsx")
 
         st.divider()
         up = st.file_uploader("Upload Excel:", type="xlsx")
