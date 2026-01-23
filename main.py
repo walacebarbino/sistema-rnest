@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 from google.oauth2.service_account import Credentials
@@ -104,7 +105,7 @@ except:
 
 st.sidebar.subheader("MENU G-MONT")
 disc = st.sidebar.selectbox("DISCIPLINA:", ["ELÉTRICA", "INSTRUMENTAÇÃO", "ESTRUTURA"])
-aba = st.sidebar.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 GESTÃO DE DADOS"])
+aba = st.sidebar.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 EXPORTAÇÃO E IMPORTAÇÕES"])
 
 st.sidebar.divider()
 if st.sidebar.button("🚪 SAIR DO SISTEMA", use_container_width=True):
@@ -134,7 +135,7 @@ if not df_atual.empty:
     }
 
     # --- ABA 1: EDIÇÃO E QUADRO ---
-    if aba == "📝 EDIÇÃO":
+    if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"📝 Edição por TAG - {disc}")
         
         # --- PARTE SUPERIOR: SELEÇÃO E EDIÇÃO ---
@@ -181,7 +182,7 @@ if not df_atual.empty:
         col_cad, col_del = st.columns(2)
 
         with col_cad:
-            with st.expander("➕ CADASTRAR TAG", expanded=False):
+            with st.expander("➕ CADASTRAR NOVO TAG", expanded=False):
                 with st.form("form_novo_tag"):
                     c1, c2 = st.columns(2)
                     n_tag = c1.text_input("TAG *")
@@ -206,7 +207,7 @@ if not df_atual.empty:
                             st.error("O campo TAG é obrigatório.")
 
         with col_del:
-            with st.expander("🗑️ DELETAR TAG", expanded=False):
+            with st.expander("🗑️ DELETAR TAG DO BANCO", expanded=False):
                 tag_para_deletar = st.selectbox("Selecione a TAG para DELETAR:", [""] + sorted(df_atual['TAG'].unique().tolist()))
                 
                 if tag_para_deletar:
@@ -295,10 +296,10 @@ if not df_atual.empty:
         cols_p = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
         st.dataframe(df_p[cols_p], use_container_width=True, hide_index=True, column_config=cfg_rel)
         buf_p = BytesIO(); df_p[cols_p].to_excel(buf_p, index=False)
-        st.download_button("📥 EXPORTAR PROGRAMAÇÃO", buf_p.getvalue(), f"Programado_{disc}.xlsx")
+        st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", buf_p.getvalue(), f"Programado_{disc}.xlsx")
 
         st.divider()
-        st.markdown("### 🚩 LISTA DE PENDÊNCIAS")
+        st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
         df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
         cols_pend = ['TAG', 'DESCRIÇÃO', 'ÁREA', 'STATUS', 'PREVISTO', 'OBS']
         cfg_pend_br = {**cfg_rel, "PREVISTO": st.column_config.DateColumn("PREVISTO", format="DD/MM/YYYY")}
@@ -307,7 +308,7 @@ if not df_atual.empty:
         st.download_button("📥 EXPORTAR PENDÊNCIAS", buf_pe.getvalue(), f"Pendencias_{disc}.xlsx")
 
         st.divider()
-        st.markdown("### 📈 AVANÇO SEMANAL (REALIZADO)")
+        st.markdown("### 📈 AVANÇO POR SEMANA (REALIZADO)")
         semanas_disponiveis = sorted(df_atual['SEMANA OBRA'].unique(), reverse=True)
         semana_sel = st.selectbox("Selecione a Semana:", semanas_disponiveis if len(semanas_disponiveis) > 0 else ["-"])
         df_semana = df_atual[(df_atual['SEMANA OBRA'] == semana_sel) & (df_atual['STATUS'] == 'MONTADO')]
@@ -316,7 +317,7 @@ if not df_atual.empty:
         buf_r = BytesIO(); df_semana[cols_av].to_excel(buf_r, index=False)
         st.download_button(f"📥 EXPORTAR SEMANA {semana_sel}", buf_r.getvalue(), f"Avanco_Semana_{semana_sel}_{disc}.xlsx")
 
-   # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
+    # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
         st.subheader(f"📤 Exportações e Importações - {disc}")
         c1, c2, c3 = st.columns(3)
