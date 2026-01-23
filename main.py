@@ -25,6 +25,14 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+/* Centraliza a imagem na sidebar */
+    [data-testid="stSidebarNav"] { padding-top: 20px; }
+    [data-testid="stSidebar"] img {
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
 # --- CONTROLE DE ACESSO ---
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 
@@ -95,11 +103,14 @@ def calcular_status_tag(d_i, d_f, d_m):
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
-# --- LOGO ---
-try:
-    st.sidebar.image("LOGO2.png", width=120)
-except:
-    st.sidebar.markdown("### G-MONT")
+# --- LOGO NA SIDEBAR (Centralizada) ---
+with st.sidebar:
+    c_side1, c_side2, c_side3 = st.columns([1, 3, 1])
+    with c_side2:
+        try:
+            st.image("LOGO2.png", width=120)
+        except:
+            st.markdown("### G-MONT")
 
 st.sidebar.subheader("MENU G-MONT")
 disc = st.sidebar.selectbox("DISCIPLINA:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
