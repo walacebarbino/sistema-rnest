@@ -221,11 +221,12 @@ if not df_atual.empty:
             st.info("🚀 **IMPORTAÇÃO**")
             up = st.file_uploader("Upload Excel:", type="xlsx", label_visibility="collapsed")
             if up:
-                if st.button("🚀 IMPORTAR DADOS", use_container_width=True):
+                if st.button("🚀 IMPORTAR E LIMPAR DADOS", use_container_width=True):
                     try:
-                        log_container = st.expander("📄 LOG DE PROCESSAMENTO", expanded=True)
+                        log_container = st.expander("📄 STATUS DA LIMPEZA/IMPORTAÇÃO", expanded=True)
                         
-                        df_up = pd.read_excel(up).fillna('')
+                        # Lê o Excel tratando tudo como string para não virar 'nan' matemático
+                        df_up = pd.read_excel(up).astype(str).replace(['nan', 'NaT', 'None', 'NaN', 'None'], '')
                         df_up.columns = [str(c).strip().upper() for c in df_up.columns]
                         
                         lista_mestra = ws_atual.get_all_values()
@@ -233,23 +234,22 @@ if not df_atual.empty:
                         idx_map = {name: i for i, name in enumerate(headers)}
                         
                         sucesso = 0
-                        # Colunas que o sistema vai limpar se estiverem vazias no Excel
                         colunas_alvo = ['SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
 
                         for _, r in df_up.iterrows():
                             tag_import = str(r.get('TAG', '')).strip()
-                            if not tag_import: continue
+                            if not tag_import or tag_import == '': continue
                             
                             for i, row in enumerate(lista_mestra[1:]):
                                 if str(row[0]).strip() == tag_import:
                                     for col in colunas_alvo:
                                         col_up = col.upper()
                                         if col_up in df_up.columns and col_up in idx_map:
-                                            # Pega o valor do Excel
+                                            # Pega o valor e remove qualquer lixo (espaços, hífens, placeholders)
                                             val_excel = str(r[col_up]).strip()
                                             
-                                            # Lógica de Limpeza Real: Se for nulo ou vazio no Excel, limpa na lista mestra
-                                            if val_excel.lower() in ['nan', 'nat', 'none', 'dd/mm/yyyy', '', '0']:
+                                            # SE ESTIVER VAZIO OU COM FORMATO DE DATA INVÁLIDO, LIMPA O SHEETS
+                                            if val_excel in ['', '-', '0', 'DD/MM/YYYY', 'nan']:
                                                 val_final = ''
                                             else:
                                                 val_final = val_excel
@@ -257,18 +257,18 @@ if not df_atual.empty:
                                             lista_mestra[i+1][idx_map[col_up]] = val_final
                                     
                                     sucesso += 1
-                                    log_container.write(f"✅ TAG {tag_import}: Processada")
+                                    log_container.write(f"🧹 TAG {tag_import}: Sincronizada/Limpa")
                                     break
 
                         if sucesso > 0:
                             ws_atual.update('A1', lista_mestra)
-                            st.success(f"✅ Sincronização concluída! {sucesso} TAGs atualizadas.")
+                            st.success(f"✅ Sucesso! {sucesso} TAGs foram atualizadas e limpas.")
                             st.rerun()
                         else:
-                            st.warning("⚠️ Nenhuma TAG correspondente encontrada.")
+                            st.error("❌ Nenhuma TAG do Excel foi encontrada na base.")
                             
                     except Exception as e:
-                        st.error(f"❌ ERRO: {e}")
+                        st.error(f"❌ Erro ao processar: {e}")
         
         with c3:
             st.info("💾 **BASE COMPLETA**")
