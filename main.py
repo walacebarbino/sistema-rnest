@@ -223,50 +223,50 @@ if not df_atual.empty:
             if up:
                 if st.button("🚀 IMPORTAR DADOS", use_container_width=True):
                     try:
-                        # Container de Log para você ver o que está acontecendo
-                        log_container = st.expander("📄 LOG DE IMPORTAÇÃO", expanded=True)
+                        log_container = st.expander("📄 LOG DE PROCESSAMENTO", expanded=True)
                         
+                        # Correção do erro 'upper': convertendo nomes das colunas corretamente
                         df_up = pd.read_excel(up).fillna('')
-                        df_up.columns = df_up.columns.str.strip().upper()
+                        df_up.columns = [str(c).strip().upper() for c in df_up.columns]
                         
                         lista_mestra = ws_atual.get_all_values()
-                        headers = [h.strip().upper() for h in lista_mestra[0]]
+                        headers = [str(h).strip().upper() for h in lista_mestra[0]]
                         idx_map = {name: i for i, name in enumerate(headers)}
                         
                         sucesso = 0
                         colunas_alvo = ['SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
 
-                        for index, r in df_up.iterrows():
+                        for _, r in df_up.iterrows():
                             tag_import = str(r.get('TAG', '')).strip()
-                            if not tag_import: continue
+                            if not tag_import or tag_import == '': continue
                             
                             achou = False
                             for i, row in enumerate(lista_mestra[1:]):
                                 if str(row[0]).strip() == tag_import:
                                     achou = True
                                     for col in colunas_alvo:
-                                        col_upper = col.upper()
-                                        if col_upper in df_up.columns and col_upper in idx_map:
-                                            val = str(r[col_upper]).strip()
-                                            # Lógica de Limpeza
+                                        col_up = col.upper()
+                                        if col_up in df_up.columns and col_up in idx_map:
+                                            val = str(r[col_up]).strip()
+                                            # Lógica de Limpeza: se estiver vazio no Excel, limpa no Sheets
                                             if val.lower() in ['nan', 'nat', 'none', 'dd/mm/yyyy', '']:
                                                 val = ''
-                                            lista_mestra[i+1][idx_map[col_upper]] = val
+                                            lista_mestra[i+1][idx_map[col_up]] = val
                                     sucesso += 1
-                                    log_container.write(f"✅ TAG {tag_import}: Atualizada")
+                                    log_container.write(f"✅ TAG {tag_import}: Sincronizada")
                                     break
                             if not achou:
-                                log_container.write(f"❌ TAG {tag_import}: Não encontrada na base")
+                                log_container.write(f"⚠️ TAG {tag_import}: Não encontrada na base")
 
                         if sucesso > 0:
                             ws_atual.update('A1', lista_mestra)
-                            st.success(f"✅ Finalizado! {sucesso} TAGs sincronizadas.")
-                            st.button("🔄 ATUALIZAR TELAS") # Botão manual para forçar recarregamento se necessário
+                            st.success(f"✅ Finalizado! {sucesso} TAGs processadas.")
+                            st.rerun()
                         else:
-                            st.warning("⚠️ O processo terminou, mas nenhuma TAG foi alterada.")
+                            st.warning("⚠️ Nenhuma TAG correspondente foi encontrada para atualizar.")
                             
                     except Exception as e:
-                        st.error(f"❌ ERRO CRÍTICO: {e}")
+                        st.error(f"❌ ERRO NO PROCESSAMENTO: {e}")
         
         with c3:
             st.info("💾 **BASE COMPLETA**")
