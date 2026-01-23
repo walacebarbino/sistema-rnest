@@ -223,39 +223,50 @@ if not df_atual.empty:
             if up:
                 if st.button("🚀 IMPORTAR DADOS", use_container_width=True):
                     try:
-                        with st.spinner('Sincronizando em massa para evitar bloqueio...'):
-                            df_up = pd.read_excel(up).fillna('')
-                            df_up.columns = df_up.columns.str.strip()
-                            
-                            # Baixa os dados atuais da planilha para a memória
-                            lista_mestra = ws_atual.get_all_values()
-                            headers = lista_mestra[0]
-                            
-                            # Mapeia as colunas do Sheets
-                            idx_map = {name: i for i, name in enumerate(headers)}
-                            colunas_alvo = ['SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
-                            
-                            sucesso = 0
-                            # Atualiza a lista na memória
-                            for _, r in df_up.iterrows():
-                                tag_import = str(r['TAG']).strip()
-                                for i, row in enumerate(lista_mestra[1:]):
-                                    if str(row[0]).strip() == tag_import:
-                                        for col in colunas_alvo:
-                                            if col in df_up.columns and col in idx_map:
-                                                val = str(r[col]).replace('nan', '').replace('NaN', '').replace('NaT', '').strip()
-                                                lista_mestra[i+1][idx_map[col]] = val
-                                        sucesso += 1
-                                        break
+                        # Container de Log para você ver o que está acontecendo
+                        log_container = st.expander("📄 LOG DE IMPORTAÇÃO", expanded=True)
+                        
+                        df_up = pd.read_excel(up).fillna('')
+                        df_up.columns = df_up.columns.str.strip().upper()
+                        
+                        lista_mestra = ws_atual.get_all_values()
+                        headers = [h.strip().upper() for h in lista_mestra[0]]
+                        idx_map = {name: i for i, name in enumerate(headers)}
+                        
+                        sucesso = 0
+                        colunas_alvo = ['SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
 
-                            # ENVIA TUDO DE UMA VEZ SÓ
-                            ws_atual.update('A1', lista_mestra)
+                        for index, r in df_up.iterrows():
+                            tag_import = str(r.get('TAG', '')).strip()
+                            if not tag_import: continue
                             
-                            st.success(f"✅ {sucesso} TAGs atualizadas com sucesso!")
-                            st.rerun()
+                            achou = False
+                            for i, row in enumerate(lista_mestra[1:]):
+                                if str(row[0]).strip() == tag_import:
+                                    achou = True
+                                    for col in colunas_alvo:
+                                        col_upper = col.upper()
+                                        if col_upper in df_up.columns and col_upper in idx_map:
+                                            val = str(r[col_upper]).strip()
+                                            # Lógica de Limpeza
+                                            if val.lower() in ['nan', 'nat', 'none', 'dd/mm/yyyy', '']:
+                                                val = ''
+                                            lista_mestra[i+1][idx_map[col_upper]] = val
+                                    sucesso += 1
+                                    log_container.write(f"✅ TAG {tag_import}: Atualizada")
+                                    break
+                            if not achou:
+                                log_container.write(f"❌ TAG {tag_import}: Não encontrada na base")
+
+                        if sucesso > 0:
+                            ws_atual.update('A1', lista_mestra)
+                            st.success(f"✅ Finalizado! {sucesso} TAGs sincronizadas.")
+                            st.button("🔄 ATUALIZAR TELAS") # Botão manual para forçar recarregamento se necessário
+                        else:
+                            st.warning("⚠️ O processo terminou, mas nenhuma TAG foi alterada.")
                             
                     except Exception as e:
-                        st.error(f"❌ ERRO: {e}")
+                        st.error(f"❌ ERRO CRÍTICO: {e}")
         
         with c3:
             st.info("💾 **BASE COMPLETA**")
