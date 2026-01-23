@@ -7,7 +7,6 @@ import json
 import plotly.graph_objects as go
 from io import BytesIO
 from datetime import datetime, timedelta
-import time
 
 # --- CONFIGURAÇÃO E DATA BASE DA OBRA ---
 st.set_page_config(page_title="SISTEMA G-MONT", layout="wide")
@@ -62,19 +61,13 @@ def extrair_dados(nome_planilha):
     try:
         sh = client.open(nome_planilha)
         ws = sh.get_worksheet(0)
-        # Tenta ler pelo intervalo DADOS, se não existir, lê tudo
-        try:
-            data = ws.get('DADOS')
-        except:
-            data = ws.get_all_values()
-            
+        data = ws.get_all_values()
         if len(data) > 1:
             df = pd.DataFrame(data[1:], columns=data[0])
             df.columns = df.columns.str.strip()
             col_obj = ['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
             for c in col_obj:
                 if c not in df.columns: df[c] = ""
-            # Limpeza anti-NaN para leitura
             for c in df.columns:
                 df[c] = df[c].astype(str).str.strip().replace(['nan', 'None', 'NaT', '-'], '')
             return df, ws
@@ -131,9 +124,7 @@ if not df_atual.empty:
         dados_tag = df_atual.iloc[idx_base]
         with c_sem:
             sem_input = st.text_input("Semana da Obra:", value=dados_tag['SEMANA OBRA'])
-        
         sug_ini, sug_fim = get_dates_from_week(sem_input)
-        
         with st.form("form_edit_final"):
             c1, c2, c3, c4 = st.columns(4)
             def conv_dt(val, default):
@@ -151,8 +142,8 @@ if not df_atual.empty:
                 f_mont = v_mont.strftime("%d/%m/%Y") if v_mont else ""
                 updates = {'SEMANA OBRA': sem_input, 'DATA INIC PROG': f_ini, 'DATA FIM PROG': f_fim, 'DATA MONT': f_mont, 'STATUS': st_atual, 'OBS': v_obs}
                 for col, val in updates.items():
-                    if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], val)
-                st.success("Salvo!"); time.sleep(1); st.rerun()
+                    if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], str(val))
+                st.success("Salvo!"); st.rerun()
         st.divider()
         st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'STATUS', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']], 
                      use_container_width=True, hide_index=True, column_config=cfg_rel)
@@ -184,12 +175,10 @@ if not df_atual.empty:
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total", len(df_atual)); m2.metric("Montados ✅", len(df_atual[df_atual['STATUS']=='MONTADO']))
         m3.metric("Programados 📅", len(df_atual[df_atual['STATUS']=='PROGRAMADO'])); m4.metric("Aguardando ⏳", len(df_atual[df_atual['STATUS']=='AGUARDANDO PROG']))
-        
         st.divider()
         st.markdown("### 📅 PROGRAMADO PRODUÇÃO")
         df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
         st.dataframe(df_p[['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']], use_container_width=True, hide_index=True, column_config=cfg_rel)
-
         st.divider()
         st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
         df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
@@ -203,44 +192,27 @@ if not df_atual.empty:
             mod = df_atual[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']].head(5)
             b_m = BytesIO(); mod.to_excel(b_m, index=False)
             st.download_button("📥 EXPORTAR MOD PLANILHA", b_m.getvalue(), "modelo_gmont.xlsx", use_container_width=True)
-        
         with c2:
-            st.info("🚀 **IMPORTAÇÃO EM MASSA**")
+            st.info("🚀 **IMPORTAÇÃO**")
             up = st.file_uploader("Upload Excel:", type="xlsx", label_visibility="collapsed")
             if up:
                 if st.button("🚀 IMPORTAR DADOS", use_container_width=True):
                     try:
-                        with st.spinner('Sincronizando...'):
-                            df_up = pd.read_excel(up, engine='openpyxl').fillna('')
-                            df_up.columns = df_up.columns.str.strip().upper()
-                            
-                            # BUSCA A MATRIZ ATUAL (Pelo nome DADOS ou A1)
-                            try: data_mat = ws_atual.get('DADOS')
-                            except: data_mat = ws_atual.get_all_values()
-                            
-                            sucesso = 0
-                            for _, r in df_up.iterrows():
-                                tag_ex = str(r.get('TAG', '')).strip()
-                                if not tag_ex: continue
-                                for i, row in enumerate(data_mat[1:]):
-                                    if str(row[0]).strip() == tag_ex:
-                                        if 'SEMANA OBRA' in df_up.columns: data_mat[i+1][1] = str(r['SEMANA OBRA'])
-                                        if 'DATA INIC PROG' in df_up.columns: data_mat[i+1][2] = str(r['DATA INIC PROG'])
-                                        if 'DATA FIM PROG' in df_up.columns: data_mat[i+1][3] = str(r['DATA FIM PROG'])
-                                        if 'DATA MONT' in df_up.columns: data_mat[i+1][4] = str(r['DATA MONT'])
-                                        if 'OBS' in df_up.columns: data_mat[i+1][6] = str(r['OBS'])
-                                        sucesso += 1
-                            
-                            # Limpeza final de qualquer NaN antes de enviar
-                            final_mat = [[str(c) if (str(c).lower() != 'nan') else '' for c in lista] for lista in data_mat]
-                            
-                            # Atualização em massa (Resolve erro de Cota e NaN)
-                            try: ws_atual.update('DADOS', final_mat)
-                            except: ws_atual.update('A1', final_mat)
-                            
-                            st.balloons(); st.success(f"✅ {sucesso} TAGs atualizadas!"); time.sleep(2); st.rerun()
+                        df_up = pd.read_excel(up).fillna('')
+                        df_up.columns = df_up.columns.str.strip()
+                        sucesso = 0
+                        for _, r in df_up.iterrows():
+                            tag_import = str(r['TAG']).strip()
+                            if tag_import in df_atual['TAG'].values:
+                                ln = df_atual.index[df_atual['TAG'] == tag_import][0] + 2
+                                colunas = ['SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
+                                for col in colunas:
+                                    if col in df_up.columns and col in cols_map:
+                                        valor = str(r[col]).replace('nan', '').replace('NaN', '')
+                                        ws_atual.update_cell(ln, cols_map[col], valor)
+                                sucesso += 1
+                        st.success(f"✅ {sucesso} TAGs atualizadas!"); st.rerun()
                     except Exception as e: st.error(f"Erro: {e}")
-
         with c3:
             st.info("💾 **BASE COMPLETA**")
             b_f = BytesIO(); df_atual.to_excel(b_f, index=False)
