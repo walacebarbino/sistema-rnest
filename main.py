@@ -235,47 +235,37 @@ if not df_atual.empty:
         st.plotly_chart(fig, use_container_width=True)
 
     # --- ABA 3: RELATÓRIOS ---
-  elif aba == "📋 RELATÓRIOS":
+  # --- ABA 3: RELATÓRIOS ---
+    elif aba == "📋 RELATÓRIOS":
         st.subheader(f"📋 Painel de Relatórios - {disc}")
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total", len(df_atual))
-        m2.metric("Montados ✅", len(df_atual[df_atual['STATUS']=='MONTADO']))
-        m3.metric("Programados 📅", len(df_atual[df_atual['STATUS']=='PROGRAMADO']))
-        m4.metric("Aguardando ⏳", len(df_atual[df_atual['STATUS']=='AGUARDANDO PROG']))
+        m1.metric("Total", len(df_atual)); m2.metric("Montados ✅", len(df_atual[df_atual['STATUS']=='MONTADO']))
+        m3.metric("Programados 📅", len(df_atual[df_atual['STATUS']=='PROGRAMADO'])); m4.metric("Aguardando ⏳", len(df_atual[df_atual['STATUS']=='AGUARDANDO PROG']))
         
         st.divider()
-        
-        # --- SEÇÃO: PROGRAMADO PRODUÇÃO ---
         st.markdown("### 📅 PROGRAMADO PRODUÇÃO")
         df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
         cols_p = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
         st.dataframe(df_p[cols_p], use_container_width=True, hide_index=True, column_config=cfg_rel)
-        
-        buf_p = BytesIO()
-        df_p[cols_p].to_excel(buf_p, index=False)
+        buf_p = BytesIO(); df_p[cols_p].to_excel(buf_p, index=False)
         st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", buf_p.getvalue(), f"Programado_{disc}.xlsx")
 
         st.divider()
-        
-        # --- SEÇÃO: LISTA DE PENDÊNCIAS TOTAIS (ORDEM CORRIGIDA) ---
         st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
         df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
         
-        # ÁREA antes de STATUS e PREVISTO após STATUS
+        # --- AQUI ESTÁ A MUDANÇA QUE VOCÊ PEDIU ---
+        # ÁREA antes de STATUS e PREVISTO (PREVISÃO) depois de STATUS
         cols_pend = ['TAG', 'DESCRIÇÃO', 'ÁREA', 'STATUS', 'PREVISTO', 'OBS']
         
-        # Garante que a coluna de data apareça formatada no quadro
+        # Adicionamos a configuração para a data da previsão aparecer como "PREVISÃO" e no formato brasileiro
         cfg_pend_br = {**cfg_rel, "PREVISTO": st.column_config.DateColumn("PREVISÃO", format="DD/MM/YYYY")}
         
         st.dataframe(df_pend[cols_pend], use_container_width=True, hide_index=True, column_config=cfg_pend_br)
-        
-        buf_pe = BytesIO()
-        df_pend[cols_pend].to_excel(buf_pe, index=False)
+        buf_pe = BytesIO(); df_pend[cols_pend].to_excel(buf_pe, index=False)
         st.download_button("📥 EXPORTAR PENDÊNCIAS", buf_pe.getvalue(), f"Pendencias_{disc}.xlsx")
 
         st.divider()
-        
-        # --- SEÇÃO: AVANÇO POR SEMANA (REALIZADO) ---
         st.markdown("### 📈 AVANÇO POR SEMANA (REALIZADO)")
         semanas_disponiveis = sorted(df_atual['SEMANA OBRA'].unique(), reverse=True)
         semana_sel = st.selectbox("Selecione a Semana para o Relatório:", semanas_disponiveis)
@@ -283,13 +273,11 @@ if not df_atual.empty:
         df_semana = df_atual[(df_atual['SEMANA OBRA'] == semana_sel) & (df_atual['STATUS'] == 'MONTADO')]
         cols_av = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
         
-        # Configuração para data brasileira no quadro de avanço
+        # Mantive o padrão de data brasileira aqui também
         cfg_av_br = {**cfg_rel, "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY")}
         
         st.dataframe(df_semana[cols_av], use_container_width=True, hide_index=True, column_config=cfg_av_br)
-        
-        buf_r = BytesIO()
-        df_semana[cols_av].to_excel(buf_r, index=False)
+        buf_r = BytesIO(); df_semana[cols_av].to_excel(buf_r, index=False)
         st.download_button(f"📥 EXPORTAR SEMANA {semana_sel}", buf_r.getvalue(), f"Avanco_Semana_{semana_sel}_{disc}.xlsx")
 
     # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
