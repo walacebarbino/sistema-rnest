@@ -64,6 +64,7 @@ def extrair_dados(nome_planilha):
         if len(data) > 1:
             df = pd.DataFrame(data[1:], columns=data[0])
             df.columns = df.columns.str.strip()
+            # Garante que as colunas essenciais existam para evitar KeyError
             col_obj = ['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
             for c in col_obj:
                 if c not in df.columns: df[c] = ""
@@ -90,11 +91,14 @@ def calcular_status_tag(d_i, d_f, d_m):
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
-# --- AJUSTE DA LOGO (LOGO2) ---
+# --- AJUSTE DA LOGO (CORRIGIDO PARA LOGO2.png MAIÚSCULO CONFORME GITHUB) ---
 try:
-    st.sidebar.image("logo2.png", use_container_width=True)
+    st.sidebar.image("LOGO2.png", use_container_width=True)
 except:
-    st.sidebar.warning("Arquivo logo2.png não encontrado.")
+    try:
+        st.sidebar.image("logo2.png", use_container_width=True)
+    except:
+        st.sidebar.warning("Arquivo LOGO2.png não encontrado no repositório.")
 
 st.sidebar.subheader("MENU G-MONT")
 disc = st.sidebar.selectbox("DISCIPLINA:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
@@ -182,17 +186,23 @@ if not df_atual.empty:
         sem_f = st.selectbox("Filtrar por Semana:", ["TODAS"] + semanas)
         df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
         if sem_f != "TODAS": df_p = df_p[df_p['SEMANA OBRA'] == sem_f]
+        
+        # Proteção contra KeyError: Só exibe colunas que existem
         cols_producao = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
-        st.dataframe(df_p[cols_producao], use_container_width=True, hide_index=True)
-        buf_p = BytesIO(); df_p[cols_producao].to_excel(buf_p, index=False)
+        cols_existentes = [c for c in cols_producao if c in df_p.columns]
+        st.dataframe(df_p[cols_existentes], use_container_width=True, hide_index=True)
+        
+        buf_p = BytesIO(); df_p[cols_existentes].to_excel(buf_p, index=False)
         st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", buf_p.getvalue(), f"Programado_{disc}.xlsx")
 
         st.divider()
         st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
         cols_pendencias = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
+        cols_existentes_pend = [c for c in cols_pendencias if c in df_atual.columns]
         df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
-        st.dataframe(df_pend[cols_pendencias], use_container_width=True, hide_index=True)
-        buf_pe = BytesIO(); df_pend[cols_pendencias].to_excel(buf_pe, index=False)
+        st.dataframe(df_pend[cols_existentes_pend], use_container_width=True, hide_index=True)
+        
+        buf_pe = BytesIO(); df_pend[cols_existentes_pend].to_excel(buf_pe, index=False)
         st.download_button("📥 EXPORTAR PENDÊNCIAS", buf_pe.getvalue(), f"Pendencias_{disc}.xlsx")
 
         st.divider()
@@ -200,8 +210,10 @@ if not df_atual.empty:
         df_atual['DT_TEMP'] = pd.to_datetime(df_atual['DATA MONT'], dayfirst=True, errors='coerce')
         df_setec = df_atual[df_atual['DT_TEMP'] >= (datetime.now() - timedelta(days=7))]
         cols_avanco = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
-        st.dataframe(df_setec[cols_avanco], use_container_width=True, hide_index=True)
-        buf_r = BytesIO(); df_setec[cols_avanco].to_excel(buf_r, index=False)
+        cols_existentes_av = [c for c in cols_avanco if c in df_setec.columns]
+        st.dataframe(df_setec[cols_existentes_av], use_container_width=True, hide_index=True)
+        
+        buf_r = BytesIO(); df_setec[cols_existentes_av].to_excel(buf_r, index=False)
         st.download_button("📥 EXPORTAR AVANÇO SEMANAL", buf_r.getvalue(), f"Realizado_7_dias_{disc}.xlsx")
 
     # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
