@@ -225,7 +225,6 @@ if not df_atual.empty:
                     try:
                         log_container = st.expander("📄 LOG DE PROCESSAMENTO", expanded=True)
                         
-                        # Correção do erro 'upper': convertendo nomes das colunas corretamente
                         df_up = pd.read_excel(up).fillna('')
                         df_up.columns = [str(c).strip().upper() for c in df_up.columns]
                         
@@ -234,39 +233,42 @@ if not df_atual.empty:
                         idx_map = {name: i for i, name in enumerate(headers)}
                         
                         sucesso = 0
+                        # Colunas que o sistema vai limpar se estiverem vazias no Excel
                         colunas_alvo = ['SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
 
                         for _, r in df_up.iterrows():
                             tag_import = str(r.get('TAG', '')).strip()
-                            if not tag_import or tag_import == '': continue
+                            if not tag_import: continue
                             
-                            achou = False
                             for i, row in enumerate(lista_mestra[1:]):
                                 if str(row[0]).strip() == tag_import:
-                                    achou = True
                                     for col in colunas_alvo:
                                         col_up = col.upper()
                                         if col_up in df_up.columns and col_up in idx_map:
-                                            val = str(r[col_up]).strip()
-                                            # Lógica de Limpeza: se estiver vazio no Excel, limpa no Sheets
-                                            if val.lower() in ['nan', 'nat', 'none', 'dd/mm/yyyy', '']:
-                                                val = ''
-                                            lista_mestra[i+1][idx_map[col_up]] = val
+                                            # Pega o valor do Excel
+                                            val_excel = str(r[col_up]).strip()
+                                            
+                                            # Lógica de Limpeza Real: Se for nulo ou vazio no Excel, limpa na lista mestra
+                                            if val_excel.lower() in ['nan', 'nat', 'none', 'dd/mm/yyyy', '', '0']:
+                                                val_final = ''
+                                            else:
+                                                val_final = val_excel
+                                            
+                                            lista_mestra[i+1][idx_map[col_up]] = val_final
+                                    
                                     sucesso += 1
-                                    log_container.write(f"✅ TAG {tag_import}: Sincronizada")
+                                    log_container.write(f"✅ TAG {tag_import}: Processada")
                                     break
-                            if not achou:
-                                log_container.write(f"⚠️ TAG {tag_import}: Não encontrada na base")
 
                         if sucesso > 0:
                             ws_atual.update('A1', lista_mestra)
-                            st.success(f"✅ Finalizado! {sucesso} TAGs processadas.")
+                            st.success(f"✅ Sincronização concluída! {sucesso} TAGs atualizadas.")
                             st.rerun()
                         else:
-                            st.warning("⚠️ Nenhuma TAG correspondente foi encontrada para atualizar.")
+                            st.warning("⚠️ Nenhuma TAG correspondente encontrada.")
                             
                     except Exception as e:
-                        st.error(f"❌ ERRO NO PROCESSAMENTO: {e}")
+                        st.error(f"❌ ERRO: {e}")
         
         with c3:
             st.info("💾 **BASE COMPLETA**")
