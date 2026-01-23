@@ -136,7 +136,6 @@ if not df_atual.empty:
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"📝 Edição por TAG - {disc}")
         
-        # --- BLOCO 1: FORMULÁRIO DE EDIÇÃO (EXISTENTE) ---
         c_tag, c_sem = st.columns([2, 1])
         with c_tag:
             tag_sel = st.selectbox("Selecione o TAG para EDITAR:", sorted(df_atual['TAG'].unique()))
@@ -173,6 +172,48 @@ if not df_atual.empty:
                 for col, val in updates.items():
                     if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], str(val))
                 st.success("Salvo com sucesso!"); st.rerun()
+
+        # --- GERENCIAMENTO (CADASTRAR E EXCLUIR) ---
+        st.divider()
+        col_adm_add, col_adm_del = st.columns(2)
+
+        with col_adm_add:
+            with st.expander("➕ CADASTRAR NOVO TAG", expanded=False):
+                with st.form("form_novo_cadastro"):
+                    n_tag = st.text_input("TAG *")
+                    n_desc = st.text_input("DESCRIÇÃO")
+                    n_area = st.text_input("ÁREA")
+                    n_fam = st.text_input("FAMÍLIA")
+                    n_item = st.text_input("ITEM")
+                    n_qtd = st.text_input("QUANTIDADE")
+                    conf_add = st.checkbox("Confirmo os dados")
+                    if st.form_submit_button("🚀 CADASTRAR"):
+                        if n_tag and conf_add:
+                            linha_nova = [n_tag, "", "", "", "", "", "AGUARDANDO PROG", disc, n_desc, n_area, "", n_fam, n_item, "", n_qtd, "", ""]
+                            ws_atual.append_row(linha_nova)
+                            st.success(f"TAG {n_tag} cadastrado!"); st.rerun()
+
+        with col_adm_del:
+            with st.expander("🗑️ EXCLUIR UM TAG", expanded=False):
+                tag_excluir = st.selectbox("TAG para EXCLUIR:", [""] + sorted(df_atual['TAG'].unique().tolist()))
+                if tag_excluir:
+                    st.error(f"Excluir: {tag_excluir}")
+                    conf_excluir = st.checkbox("Tenho certeza")
+                    if st.button("🔴 EXCLUIR AGORA", use_container_width=True):
+                        if conf_excluir:
+                            cell = ws_atual.find(tag_excluir, in_column=1)
+                            if cell:
+                                ws_atual.delete_rows(cell.row)
+                                st.success("Removido!"); st.rerun()
+
+        st.divider()
+        # --- TABELA DE VISUALIZAÇÃO ---
+        st.dataframe(
+            df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], 
+            use_container_width=True, 
+            hide_index=True,
+            column_config={"TAG": st.column_config.TextColumn("TAG (Copiar)", help="Selecione o texto para copiar")}
+        )
 
         # --- BLOCO 2: GERENCIAMENTO (CADASTRAR E SELECIONAR PARA EXCLUIR) ---
         st.divider()
