@@ -12,12 +12,14 @@ from datetime import datetime, timedelta
 st.set_page_config(page_title="SISTEMA G-MONT", layout="wide")
 DATA_INICIO_OBRA = datetime(2025, 9, 29) 
 
-# --- CSS PARA PADRONIZAÇÃO ---
+# --- CSS PARA PADRONIZAÇÃO E ALINHAMENTO ---
 st.markdown("""
     <style>
     [data-testid="column"] { padding-left: 5px !important; padding-right: 5px !important; }
-    .stDateInput div, .stTextInput div, .stNumberInput div { height: 45px !important; }
-    label p { font-weight: bold !important; font-size: 14px !important; min-height: 25px; }
+    .stDateInput div, .stTextInput div, .stNumberInput div, .stSelectbox div { height: 45px !important; }
+    /* Força o alinhamento vertical das caixas de texto e select */
+    div[data-testid="stForm"] > div { align-items: center; }
+    label p { font-weight: bold !important; font-size: 14px !important; min-height: 25px; margin-bottom: 5px !important; }
     input:disabled { background-color: #1e293b !important; color: #60a5fa !important; opacity: 1 !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -62,7 +64,7 @@ def extrair_dados(nome_planilha):
         if len(data) > 1:
             df = pd.DataFrame(data[1:], columns=data[0])
             df.columns = df.columns.str.strip()
-            col_obj = ['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS', 'DESCRIÇÃO', 'ÁREA']
+            col_obj = ['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
             for c in col_obj:
                 if c not in df.columns: df[c] = ""
             for c in df.columns:
@@ -102,13 +104,18 @@ if not df_atual.empty:
     # --- ABA 1: EDIÇÃO E QUADRO ---
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"📝 Edição por TAG - {disc}")
-        c_tag, c_sem = st.columns([2, 1])
-        with c_tag:
-            tag_sel = st.selectbox("Selecione o TAG:", sorted(df_atual['TAG'].unique()))
-        idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
-        dados_tag = df_atual.iloc[idx_base]
-        with c_sem:
-            sem_input = st.text_input("Semana da Obra:", value=dados_tag['SEMANA OBRA'])
+        
+        # AJUSTE 2: ALINHAMENTO DAS CAIXAS TAG E SEMANA
+        col_edit_top = st.container()
+        with col_edit_top:
+            c_tag, c_sem = st.columns([2, 1])
+            with c_tag:
+                tag_sel = st.selectbox("Selecione o TAG:", sorted(df_atual['TAG'].unique()))
+            idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
+            dados_tag = df_atual.iloc[idx_base]
+            with c_sem:
+                sem_input = st.text_input("Semana da Obra:", value=dados_tag['SEMANA OBRA'])
+        
         sug_ini, sug_fim = get_dates_from_week(sem_input)
 
         with st.form("form_edit_final"):
@@ -160,7 +167,7 @@ if not df_atual.empty:
         fig.update_layout(template="plotly_dark")
         st.plotly_chart(fig, use_container_width=True)
 
-    # --- ABA 3: RELATÓRIOS (RESTAURADO COMPLETO) ---
+    # --- ABA 3: RELATÓRIOS ---
     elif aba == "📋 RELATÓRIOS":
         st.subheader(f"📋 Painel de Relatórios - {disc}")
         m1, m2, m3, m4 = st.columns(4)
@@ -173,8 +180,12 @@ if not df_atual.empty:
         sem_f = st.selectbox("Filtrar por Semana:", ["TODAS"] + semanas)
         df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
         if sem_f != "TODAS": df_p = df_p[df_p['SEMANA OBRA'] == sem_f]
-        st.dataframe(df_p[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'OBS']], use_container_width=True, hide_index=True)
-        buf_p = BytesIO(); df_p.to_excel(buf_p, index=False)
+        
+        # AJUSTE 1: INFORMAÇÕES DO RELATÓRIO DE PRODUÇÃO
+        cols_producao = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
+        st.dataframe(df_p[cols_producao], use_container_width=True, hide_index=True)
+        
+        buf_p = BytesIO(); df_p[cols_producao].to_excel(buf_p, index=False)
         st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", buf_p.getvalue(), f"Programado_{disc}.xlsx")
 
         st.divider()
