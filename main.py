@@ -206,7 +206,7 @@ if not df_atual.empty:
                             st.error("O campo TAG é obrigatório.")
 
         with col_del:
-            with st.expander("🗑️ DELETAR TAG DO BANCO", expanded=False):
+            with st.expander("🗑️ DELETAR TAG", expanded=False):
                 tag_para_deletar = st.selectbox("Selecione a TAG para DELETAR:", [""] + sorted(df_atual['TAG'].unique().tolist()))
                 
                 if tag_para_deletar:
