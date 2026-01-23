@@ -94,6 +94,7 @@ def calcular_status_tag(d_i, d_f, d_m):
 # --- CARREGAMENTO ---
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
+df_est, ws_est = extrair_dados("BD_ESTR")
 
 # --- SIDEBAR ---
 try:
@@ -102,7 +103,7 @@ except:
     st.sidebar.markdown("### G-MONT")
 
 st.sidebar.subheader("MENU G-MONT")
-disc = st.sidebar.selectbox("DISCIPLINA:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
+disc = st.sidebar.selectbox("DISCIPLINA:", ["ELÉTRICA", "INSTRUMENTAÇÃO", "ESTRUTURA"])
 aba = st.sidebar.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 EXPORTAÇÃO E IMPORTAÇÕES"])
 
 st.sidebar.divider()
@@ -110,8 +111,15 @@ if st.sidebar.button("🚪 SAIR DO SISTEMA", use_container_width=True):
     st.session_state['logado'] = False
     st.rerun()
 
-df_atual = df_ele if disc == "ELÉTRICA" else df_ins
-ws_atual = ws_ele if disc == "ELÉTRICA" else ws_ins
+# --- DIRECIONAMENTO DE DADOS ---
+if disc == "ELÉTRICA":
+    df_atual, ws_atual = df_ele, ws_ele
+elif disc == "INSTRUMENTAÇÃO":
+    df_atual, ws_atual = df_ins, ws_ins
+elif disc == "ESTRUTURA":
+    df_atual, ws_atual = df_est, ws_est
+else:
+    df_atual, ws_atual = pd.DataFrame(), None
 
 if not df_atual.empty:
     df_atual['STATUS'] = df_atual.apply(lambda r: calcular_status_tag(r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT','')), axis=1)
@@ -174,7 +182,7 @@ if not df_atual.empty:
         st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], 
                      use_container_width=True, hide_index=True, column_config={**cfg_rel, **col_dates_cfg})
 
-    # --- ABA 2: CURVA S (VERSÃO PROFISSIONAL) ---
+    # --- ABA 2: CURVA S ---
     elif aba == "📊 CURVA S":
         st.subheader(f"📊 Curva S e Avanço - {disc}")
         total_t = len(df_atual)
@@ -234,7 +242,7 @@ if not df_atual.empty:
         st.divider()
         st.markdown("### 📈 AVANÇO POR SEMANA (REALIZADO)")
         semanas_disponiveis = sorted(df_atual['SEMANA OBRA'].unique(), reverse=True)
-        semana_sel = st.selectbox("Selecione a Semana:", semanas_disponiveis)
+        semana_sel = st.selectbox("Selecione a Semana:", semanas_disponiveis if len(semanas_disponiveis) > 0 else ["-"])
         df_semana = df_atual[(df_atual['SEMANA OBRA'] == semana_sel) & (df_atual['STATUS'] == 'MONTADO')]
         cols_av = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
         st.dataframe(df_semana[cols_av], use_container_width=True, hide_index=True, column_config={**cfg_rel, "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY")})
