@@ -99,11 +99,10 @@ if not df_atual.empty:
     df_atual['STATUS'] = df_atual.apply(lambda r: calcular_status_tag(r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT','')), axis=1)
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
 
-    # --- ABA 1: EDIÇÃO (LAYOUT AJUSTADO: TAG AO LADO DE SEMANA) ---
+    # --- ABA 1: EDIÇÃO E QUADRO (RESTAURADA) ---
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"📝 Edição por TAG - {disc}")
         
-        # Colunas para TAG e SEMANA LADO A LADO
         c_tag, c_sem = st.columns([2, 1])
         with c_tag:
             tag_sel = st.selectbox("Selecione o TAG:", sorted(df_atual['TAG'].unique()))
@@ -139,61 +138,54 @@ if not df_atual.empty:
                     if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], val)
                 st.success("Salvo!"); st.rerun()
 
-    # --- ABA 2: CURVA S (TRÊS LINHAS: PREVISTO, PROGRAMADO, REALIZADO) ---
+        # AQUI ESTÁ A LISTA QUE HAVIA SUMIDO:
+        st.divider()
+        st.markdown(f"### 📋 QUADRO GERAL - {disc}")
+        st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'STATUS', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']], use_container_width=True, hide_index=True)
+
+    # --- ABA 2: CURVA S (PREVISTO, PROGRAMADO E REALIZADO) ---
     elif aba == "📊 CURVA S":
         st.subheader(f"📊 Curva S e Avanço - {disc}")
-        
-        # Avanço %
         total_t = len(df_atual)
         montados = len(df_atual[df_atual['STATUS'] == 'MONTADO'])
         per_prog = (montados / total_t * 100) if total_t > 0 else 0
         st.metric("Avanço da Disciplina", f"{per_prog:.2f}%")
         st.progress(per_prog / 100)
 
-        def gerar_curva_completa(df):
-            df_c = df.copy()
-            df_c['DT_REAL'] = pd.to_datetime(df_c['DATA MONT'], dayfirst=True, errors='coerce')
-            df_c['DT_PROG'] = pd.to_datetime(df_c['DATA FIM PROG'], dayfirst=True, errors='coerce')
-            
-            # Simulando Previsto (Baseado em uma data meta linear se não houver coluna específica)
-            real = df_c.dropna(subset=['DT_REAL']).sort_values('DT_REAL')
-            prog = df_c.dropna(subset=['DT_PROG']).sort_values('DT_PROG')
-            
-            fig = go.Figure()
-            if not prog.empty:
-                prog['Acumulado'] = range(1, len(prog) + 1)
-                fig.add_trace(go.Scatter(x=prog['DT_PROG'], y=prog['Acumulado'], name='Programado', line=dict(color='yellow', width=3)))
-            
-            if not real.empty:
-                real['Acumulado'] = range(1, len(real) + 1)
-                fig.add_trace(go.Scatter(x=real['DT_REAL'], y=real['Acumulado'], name='Realizado', line=dict(color='cyan', width=3)))
-            
-            # Linha de Base (Previsto Teórico)
-            if not prog.empty:
-                d_ini, d_fim = prog['DT_PROG'].min(), prog['DT_PROG'].max()
-                fig.add_trace(go.Scatter(x=[d_ini, d_fim], y=[0, total_t], name='Previsto (Base)', line=dict(color='gray', dash='dot')))
+        df_c = df_atual.copy()
+        df_c['DT_REAL'] = pd.to_datetime(df_c['DATA MONT'], dayfirst=True, errors='coerce')
+        df_c['DT_PROG'] = pd.to_datetime(df_c['DATA FIM PROG'], dayfirst=True, errors='coerce')
+        
+        real = df_c.dropna(subset=['DT_REAL']).sort_values('DT_REAL')
+        prog = df_c.dropna(subset=['DT_PROG']).sort_values('DT_PROG')
+        
+        fig = go.Figure()
+        if not prog.empty:
+            prog['Acumulado'] = range(1, len(prog) + 1)
+            fig.add_trace(go.Scatter(x=prog['DT_PROG'], y=prog['Acumulado'], name='Programado', line=dict(color='yellow', width=3)))
+        if not real.empty:
+            real['Acumulado'] = range(1, len(real) + 1)
+            fig.add_trace(go.Scatter(x=real['DT_REAL'], y=real['Acumulado'], name='Realizado', line=dict(color='cyan', width=3)))
+        if not prog.empty:
+            d_ini, d_fim = prog['DT_PROG'].min(), prog['DT_PROG'].max()
+            fig.add_trace(go.Scatter(x=[d_ini, d_fim], y=[0, total_t], name='Previsto (Base)', line=dict(color='gray', dash='dot')))
+        
+        fig.update_layout(template="plotly_dark")
+        st.plotly_chart(fig, use_container_width=True)
 
-            fig.update_layout(title="Curva S: Previsto x Programado x Realizado", template="plotly_dark")
-            return fig
-
-        st.plotly_chart(gerar_curva_completa(df_atual), use_container_width=True)
-
-    # --- ABA 3: RELATÓRIOS (PENDÊNCIAS E EXPORTAÇÕES) ---
+    # --- ABA 3: RELATÓRIOS ---
     elif aba == "📋 RELATÓRIOS":
-        st.subheader(f"📋 Relatórios - {disc}")
+        st.subheader(f"📋 Relatórios e Pendências - {disc}")
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total", len(df_atual))
-        m2.metric("Montados ✅", len(df_atual[df_atual['STATUS']=='MONTADO']))
-        m3.metric("Programados 📅", len(df_atual[df_atual['STATUS']=='PROGRAMADO']))
-        m4.metric("Aguardando ⏳", len(df_atual[df_atual['STATUS']=='AGUARDANDO PROG']))
-
+        m1.metric("Total", len(df_atual)); m2.metric("Montados", len(df_atual[df_atual['STATUS']=='MONTADO']))
+        m3.metric("Programados", len(df_atual[df_atual['STATUS']=='PROGRAMADO'])); m4.metric("Aguardando", len(df_atual[df_atual['STATUS']=='AGUARDANDO PROG']))
+        
         st.divider()
-        st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
+        st.markdown("### 🚩 LISTA DE PENDÊNCIAS")
         df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
         st.dataframe(df_pend[['TAG', 'STATUS', 'ÁREA', 'OBS']], use_container_width=True, hide_index=True)
-        
-        buf_p = BytesIO(); df_pend.to_excel(buf_p, index=False)
-        st.download_button("📥 EXPORTAR PENDÊNCIAS", buf_p.getvalue(), f"Pendencias_{disc}.xlsx")
+        buf = BytesIO(); df_pend.to_excel(buf, index=False)
+        st.download_button("📥 EXPORTAR PENDÊNCIAS", buf.getvalue(), f"Pendencias_{disc}.xlsx")
 
     # --- ABA 4: CARGA EM MASSA ---
     elif aba == "📤 CARGA EM MASSA":
@@ -203,7 +195,7 @@ if not df_atual.empty:
             mod = df_atual[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']].head(5)
             b_m = BytesIO(); mod.to_excel(b_m, index=False); st.download_button("📥 Baixar Modelo", b_m.getvalue(), "modelo.xlsx")
         with c_m2:
-            b_f = BytesIO(); df_atual.to_excel(b_f, index=False); st.download_button("📥 Exportar Base Completa", b_f.getvalue(), "base.xlsx")
+            b_f = BytesIO(); df_atual.to_excel(b_f, index=False); st.download_button("📥 Exportar Base", b_f.getvalue(), "base.xlsx")
 
         st.divider()
         up = st.file_uploader("Upload Excel:", type="xlsx")
