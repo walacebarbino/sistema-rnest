@@ -208,19 +208,34 @@ if not df_atual.empty:
         with col_del:
             with st.expander("🗑️ DELETAR TAG DO BANCO", expanded=False):
                 tag_para_deletar = st.selectbox("Selecione a TAG para DELETAR:", [""] + sorted(df_atual['TAG'].unique().tolist()))
+                
                 if tag_para_deletar:
-                    st.warning(f"Isso excluirá permanentemente a TAG: {tag_para_deletar}")
-                    confirm_del = st.checkbox("Eu confirmo a exclusão")
-                    if st.button("🔴 CONFIRMAR EXCLUSÃO", use_container_width=True):
+                    st.warning(f"🚨 ATENÇÃO: Isso excluirá permanentemente a TAG: {tag_para_deletar}")
+                    confirm_del = st.checkbox("Eu confirmo que desejo apagar este registro")
+                    
+                    # Criando duas colunas para os botões de ação
+                    c_btn_del, c_btn_can = st.columns(2)
+                    
+                    # Botão de Excluir
+                    if c_btn_del.button("🔴 CONFIRMAR EXCLUSÃO", use_container_width=True):
                         if confirm_del:
-                            cell = ws_atual.find(tag_para_deletar, in_column=1)
-                            if cell:
-                                ws_atual.delete_rows(cell.row)
-                                st.success(f"TAG {tag_para_deletar} removida!"); st.rerun()
-                            else:
-                                st.error("TAG não encontrada.")
+                            try:
+                                cell = ws_atual.find(tag_para_deletar, in_column=1)
+                                if cell:
+                                    ws_atual.delete_rows(cell.row)
+                                    st.success(f"TAG {tag_para_deletar} removida com sucesso!")
+                                    st.rerun()
+                                else:
+                                    st.error("TAG não encontrada na planilha.")
+                            except Exception as e:
+                                st.error(f"Erro ao excluir: {e}")
                         else:
-                            st.info("Marque o checkbox de confirmação.")
+                            st.info("Você precisa marcar a caixa de confirmação acima.")
+                    
+                    # Botão de Cancelar
+                    if c_btn_can.button("⚪ CANCELAR", use_container_width=True):
+                        st.info("Operação cancelada.")
+                        st.rerun() # Recarrega a página para limpar a seleção e fechar o aviso
 
         # --- PARTE INFERIOR: QUADRO (DATAFRAME) ---
         st.divider()
