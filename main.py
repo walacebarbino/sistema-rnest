@@ -133,80 +133,80 @@ if not df_atual.empty:
     }
 
    # --- ABA 1: EDIÇÃO E QUADRO ---
-if aba == "📝 EDIÇÃO E QUADRO":
-    st.subheader(f"📝 Edição por TAG - {disc}")
-    c_tag, c_sem = st.columns([2, 1])
-    with c_tag:
-        tag_sel = st.selectbox("Selecione o TAG:", sorted(df_atual['TAG'].unique()))
-    
-    idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
-    dados_tag = df_atual.iloc[idx_base]
-    with c_sem:
-        sem_input = st.text_input("Semana da Obra:", value=dados_tag['SEMANA OBRA'])
-    
-    sug_ini, sug_fim = get_dates_from_week(sem_input)
-    
-    with st.form("form_edit_final"):
-        c1, c2, c3, c4 = st.columns(4)
-        def conv_dt(val, default):
-            try: return datetime.strptime(str(val), "%d/%m/%Y").date()
-            except: return default
+# --- ABA 1: EDIÇÃO E QUADRO ---
+    if aba == "📝 EDIÇÃO E QUADRO":
+        st.subheader(f"📝 Edição por TAG - {disc}")
+        c_tag, c_sem = st.columns([2, 1])
+        with c_tag:
+            tag_sel = st.selectbox("Selecione o TAG:", sorted(df_atual['TAG'].unique()))
+        
+        idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
+        dados_tag = df_atual.iloc[idx_base]
+        with c_sem:
+            sem_input = st.text_input("Semana da Obra:", value=dados_tag['SEMANA OBRA'])
+        
+        sug_ini, sug_fim = get_dates_from_week(sem_input)
+        
+        with st.form("form_edit_final"):
+            c1, c2, c3, c4 = st.columns(4)
+            def conv_dt(val, default):
+                try: return datetime.strptime(str(val), "%d/%m/%Y").date()
+                except: return default
 
-        v_prev = c1.date_input("Data Previsto", value=conv_dt(dados_tag.get('PREVISTO', ''), None), format="DD/MM/YYYY")
-        v_ini = c2.date_input("Início Prog", value=conv_dt(dados_tag['DATA INIC PROG'], sug_ini), format="DD/MM/YYYY")
-        v_fim = c3.date_input("Fim Prog", value=conv_dt(dados_tag['DATA FIM PROG'], sug_fim), format="DD/MM/YYYY")
-        v_mont = c4.date_input("Data Montagem", value=conv_dt(dados_tag['DATA MONT'], None), format="DD/MM/YYYY")
-        
-        st_atual = calcular_status_tag(v_ini, v_fim, v_mont)
-        st.info(f"Status Atualizado: **{st_atual}**")
-        v_obs = st.text_input("Observações:", value=dados_tag['OBS'])
-        
-        if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
-            f_prev = v_prev.strftime("%d/%m/%Y") if v_prev else ""
-            f_ini = v_ini.strftime("%d/%m/%Y") if v_ini else ""
-            f_fim = v_fim.strftime("%d/%m/%Y") if v_fim else ""
-            f_mont = v_mont.strftime("%d/%m/%Y") if v_mont else ""
+            v_prev = c1.date_input("Data Previsto", value=conv_dt(dados_tag.get('PREVISTO', ''), None), format="DD/MM/YYYY")
+            v_ini = c2.date_input("Início Prog", value=conv_dt(dados_tag['DATA INIC PROG'], sug_ini), format="DD/MM/YYYY")
+            v_fim = c3.date_input("Fim Prog", value=conv_dt(dados_tag['DATA FIM PROG'], sug_fim), format="DD/MM/YYYY")
+            v_mont = c4.date_input("Data Montagem", value=conv_dt(dados_tag['DATA MONT'], None), format="DD/MM/YYYY")
             
-            updates = {'SEMANA OBRA': sem_input, 'PREVISTO': f_prev, 'DATA INIC PROG': f_ini, 'DATA FIM PROG': f_fim, 'DATA MONT': f_mont, 'STATUS': st_atual, 'OBS': v_obs}
-            for col, val in updates.items():
-                if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], str(val))
-            st.success("Salvo com sucesso!"); st.rerun()
+            st_atual = calcular_status_tag(v_ini, v_fim, v_mont)
+            st.info(f"Status Atualizado: **{st_atual}**")
+            v_obs = st.text_input("Observações:", value=dados_tag['OBS'])
+            
+            if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
+                f_prev = v_prev.strftime("%d/%m/%Y") if v_prev else ""
+                f_ini = v_ini.strftime("%d/%m/%Y") if v_ini else ""
+                f_fim = v_fim.strftime("%d/%m/%Y") if v_fim else ""
+                f_mont = v_mont.strftime("%d/%m/%Y") if v_mont else ""
+                
+                updates = {'SEMANA OBRA': sem_input, 'PREVISTO': f_prev, 'DATA INIC PROG': f_ini, 'DATA FIM PROG': f_fim, 'DATA MONT': f_mont, 'STATUS': st_atual, 'OBS': v_obs}
+                for col, val in updates.items():
+                    if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], str(val))
+                st.success("Salvo com sucesso!"); st.rerun()
 
-    # --- NOVO: GERENCIAMENTO DE TAGS (ADICIONAR/EXCLUIR) ---
-    st.divider()
-    col_adm1, col_adm2, col_adm3 = st.columns([1, 1, 2])
-    
-    with col_adm1:
-        if st.button("➕ ADICIONAR NOVO TAG", use_container_width=True):
-            # Cria uma linha com o mínimo necessário para aparecer na lista
-            # TAG, SEMANA, INIC, FIM, PREV, MONT, STATUS, DISC, DESC, AREA, DOC, FAM, ITEM, UNID, QTD, OBS, DOC_REF
-            # Ajustado para 17 colunas conforme sua planilha
-            nova_linha = ["NOVO_TAG_" + datetime.now().strftime("%H%M%S"), "", "", "", "", "", "AGUARDANDO PROG", disc, "Nova Descrição", "", "", "", "", "", "", "", ""]
-            ws_atual.append_row(nova_linha)
-            st.success("Linha criada na planilha! Selecione o 'NOVO_TAG' acima para editar."); st.rerun()
+        # --- GERENCIAMENTO DE TAGS (INSERIDO NO QUADRO) ---
+        st.divider()
+        col_adm1, col_adm2, col_adm3 = st.columns([1, 1, 2])
+        
+        with col_adm1:
+            if st.button("➕ ADICIONAR NOVO TAG", use_container_width=True):
+                # Cria linha com colunas vazias respeitando sua tabela do Sheets
+                nova_linha = ["NOVO_TAG_" + datetime.now().strftime("%H%M%S"), "", "", "", "", "", "AGUARDANDO PROG", disc, "", "", "", "", "", "", "", "", ""]
+                ws_atual.append_row(nova_linha)
+                st.success("Linha criada!"); st.rerun()
 
-    with col_adm2:
-        if st.button("🗑️ EXCLUIR TAG SELECIONADO", use_container_width=True):
-            st.error(f"Deseja excluir permanentemente o TAG: {tag_sel}?")
-            # Aviso de confirmação para não apagar sem querer
-            if st.checkbox("Confirmo a exclusão definitiva"):
-                try:
-                    celula = ws_atual.find(tag_sel)
-                    ws_atual.delete_rows(celula.row)
-                    st.success("Removido com sucesso!"); st.rerun()
-                except:
-                    st.error("Erro ao localizar na planilha.")
+        with col_adm2:
+            if st.button("🗑️ EXCLUIR TAG SELECIONADO", use_container_width=True):
+                st.error(f"Excluir {tag_sel}?")
+                if st.checkbox("Confirmo exclusão"):
+                    try:
+                        celula = ws_atual.find(tag_sel)
+                        ws_atual.delete_rows(celula.row)
+                        st.success("Removido!"); st.rerun()
+                    except:
+                        st.error("Erro ao localizar.")
 
-    st.divider()
-    # --- QUADRO DE VISUALIZAÇÃO ---
-    col_dates_cfg = {
-        "PREVISTO": st.column_config.DateColumn(format="DD/MM/YYYY"),
-        "DATA INIC PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
-        "DATA FIM PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
-        "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY"),
-    }
-    st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], 
-                 use_container_width=True, hide_index=True, column_config={**cfg_rel, **col_dates_cfg})
+        st.divider()
+        col_dates_cfg = {
+            "PREVISTO": st.column_config.DateColumn(format="DD/MM/YYYY"),
+            "DATA INIC PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
+            "DATA FIM PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
+            "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY"),
+        }
+        st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], 
+                     use_container_width=True, hide_index=True, column_config={**cfg_rel, **col_dates_cfg})
+
+    # --- ABA 2: CURVA S (CERTIFIQUE-SE QUE ESTE 'ELIF' ESTÁ ALINHADO COM O 'IF' DA ABA 1) ---
+    elif aba == "📊 CURVA S":
 
     
     # --- ABA 2: CURVA S ---
