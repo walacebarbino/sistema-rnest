@@ -223,10 +223,9 @@ if not df_atual.empty:
             if up:
                 if st.button("🚀 IMPORTAR E LIMPAR DADOS", use_container_width=True):
                     try:
-                        log_container = st.expander("📄 STATUS DA LIMPEZA/IMPORTAÇÃO", expanded=True)
+                        log_container = st.expander("📄 STATUS DA LIMPEZA", expanded=True)
                         
-                        # Lê o Excel tratando tudo como string para não virar 'nan' matemático
-                        df_up = pd.read_excel(up).astype(str).replace(['nan', 'NaT', 'None', 'NaN', 'None'], '')
+                        df_up = pd.read_excel(up).astype(str)
                         df_up.columns = [str(c).strip().upper() for c in df_up.columns]
                         
                         lista_mestra = ws_atual.get_all_values()
@@ -238,37 +237,37 @@ if not df_atual.empty:
 
                         for _, r in df_up.iterrows():
                             tag_import = str(r.get('TAG', '')).strip()
-                            if not tag_import or tag_import == '': continue
+                            if tag_import in ['', 'nan', 'None']: continue
                             
                             for i, row in enumerate(lista_mestra[1:]):
                                 if str(row[0]).strip() == tag_import:
                                     for col in colunas_alvo:
                                         col_up = col.upper()
                                         if col_up in df_up.columns and col_up in idx_map:
-                                            # Pega o valor e remove qualquer lixo (espaços, hífens, placeholders)
-                                            val_excel = str(r[col_up]).strip()
+                                            val_excel = str(r[col_up]).strip().lower()
                                             
-                                            # SE ESTIVER VAZIO OU COM FORMATO DE DATA INVÁLIDO, LIMPA O SHEETS
-                                            if val_excel in ['', '-', '0', 'DD/MM/YYYY', 'nan']:
+                                            # LIMPEZA BRUTA: Se for lixo ou vazio, FORÇA string vazia
+                                            if val_excel in ['', 'nan', 'none', 'nat', '0', '-', '.', 'dd/mm/yyyy', 'none']:
                                                 val_final = ''
                                             else:
-                                                val_final = val_excel
+                                                val_final = str(r[col_up]).strip()
                                             
                                             lista_mestra[i+1][idx_map[col_up]] = val_final
                                     
                                     sucesso += 1
-                                    log_container.write(f"🧹 TAG {tag_import}: Sincronizada/Limpa")
+                                    log_container.write(f"🧹 TAG {tag_import}: Atualizada/Limpa")
                                     break
 
                         if sucesso > 0:
+                            # Sobrescreve a planilha inteira com os novos dados (limpos)
                             ws_atual.update('A1', lista_mestra)
-                            st.success(f"✅ Sucesso! {sucesso} TAGs foram atualizadas e limpas.")
+                            st.success(f"✅ Sucesso! {sucesso} TAGs processadas. Verifique o Painel.")
                             st.rerun()
                         else:
-                            st.error("❌ Nenhuma TAG do Excel foi encontrada na base.")
+                            st.error("❌ TAGs não encontradas.")
                             
                     except Exception as e:
-                        st.error(f"❌ Erro ao processar: {e}")
+                        st.error(f"❌ Erro: {e}")
         
         with c3:
             st.info("💾 **BASE COMPLETA**")
