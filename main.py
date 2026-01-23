@@ -205,13 +205,20 @@ if not df_atual.empty:
         st.download_button("📥 EXPORTAR PENDÊNCIAS", buf_pe.getvalue(), f"Pendencias_{disc}.xlsx")
 
         st.divider()
-        st.markdown("### 📈 AVANÇO SEMANAL (REALIZADO 7 DIAS)")
-        df_atual['DT_TEMP'] = pd.to_datetime(df_atual['DATA MONT'], dayfirst=True, errors='coerce')
-        df_setec = df_atual[df_atual['DT_TEMP'] >= (datetime.now() - timedelta(days=7))]
+        st.markdown("### 📈 AVANÇO POR SEMANA (REALIZADO)")
+        
+        # Nova caixa de seleção de semana
+        semanas_disponiveis = sorted(df_atual['SEMANA OBRA'].unique(), reverse=True)
+        semana_sel = st.selectbox("Selecione a Semana para o Relatório:", semanas_disponiveis)
+        
+        df_semana = df_atual[(df_atual['SEMANA OBRA'] == semana_sel) & (df_atual['STATUS'] == 'MONTADO')]
+        
         cols_av = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
-        st.dataframe(df_setec[cols_av], use_container_width=True, hide_index=True, column_config=cfg_rel)
-        buf_r = BytesIO(); df_setec[cols_av].to_excel(buf_r, index=False)
-        st.download_button("📥 EXPORTAR AVANÇO SEMANAL", buf_r.getvalue(), f"Realizado_7_dias_{disc}.xlsx")
+        st.dataframe(df_semana[cols_av], use_container_width=True, hide_index=True, column_config=cfg_rel)
+        
+        buf_r = BytesIO()
+        df_semana[cols_av].to_excel(buf_r, index=False)
+        st.download_button(f"📥 EXPORTAR SEMANA {semana_sel}", buf_r.getvalue(), f"Avanco_Semana_{semana_sel}_{disc}.xlsx")
 
     # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
