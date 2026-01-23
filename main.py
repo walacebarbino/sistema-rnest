@@ -142,24 +142,57 @@ if not df_atual.empty:
             def conv_dt(val, default):
                 try: return datetime.strptime(str(val), "%d/%m/%Y").date()
                 except: return default
-            v_ini = c1.date_input("Início Prog", value=conv_dt(dados_tag['DATA INIC PROG'], sug_ini), format="DD/MM/YYYY")
-            v_fim = c2.date_input("Fim Prog", value=conv_dt(dados_tag['DATA FIM PROG'], sug_fim), format="DD/MM/YYYY")
-            v_prev = c1.date_input("Data Previsto", value=conv_dt(dados_tag['PREVISTO'], None), format="DD/MM/YYYY")
-            v_mont = c3.date_input("Data Montagem", value=conv_dt(dados_tag['DATA MONT'], None), format="DD/MM/YYYY")
+           # Ocupando as colunas na nova ordem: Previsto -> Início -> Fim -> Montagem
+            v_prev = c1.date_input("Data Previsto", value=conv_dt(dados_tag.get('PREVISTO', ''), None), format="DD/MM/YYYY")
+            v_ini = c2.date_input("Início Prog", value=conv_dt(dados_tag['DATA INIC PROG'], sug_ini), format="DD/MM/YYYY")
+            v_fim = c3.date_input("Fim Prog", value=conv_dt(dados_tag['DATA FIM PROG'], sug_fim), format="DD/MM/YYYY")
+            v_mont = c4.date_input("Data Montagem", value=conv_dt(dados_tag['DATA MONT'], None), format="DD/MM/YYYY")
             st_atual = calcular_status_tag(v_ini, v_fim, v_mont)
             c4.text_input("Status Atual", value=st_atual, disabled=True)
             v_obs = st.text_input("Observações:", value=dados_tag['OBS'])
-            if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
+          
+        if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
+                # 1. Formata todas as datas para salvar no Google Sheets
+                f_prev = v_prev.strftime("%d/%m/%Y") if v_prev else ""
                 f_ini = v_ini.strftime("%d/%m/%Y") if v_ini else ""
                 f_fim = v_fim.strftime("%d/%m/%Y") if v_fim else ""
-                f_prev = v_prev.strftime("%d/%m/%Y") if v_prev else ""
-                updates = {'SEMANA OBRA': sem_input, 'PREVISTO': f_prev, 'DATA INIC PROG': f_ini, 'DATA FIM PROG': f_fim, 'DATA MONT': f_mont, 'STATUS': st_atual, 'OBS': v_obs}
                 f_mont = v_mont.strftime("%d/%m/%Y") if v_mont else ""
-                updates = {'SEMANA OBRA': sem_input, 'DATA INIC PROG': f_ini, 'DATA FIM PROG': f_fim, 'DATA MONT': f_mont, 'STATUS': st_atual, 'OBS': v_obs}
+                
+                # 2. Cria o dicionário ÚNICO de atualização (sem repetições)
+                updates = {
+                    'SEMANA OBRA': sem_input, 
+                    'PREVISTO': f_prev, 
+                    'DATA INIC PROG': f_ini, 
+                    'DATA FIM PROG': f_fim, 
+                    'DATA MONT': f_mont, 
+                    'STATUS': st_atual, 
+                    'OBS': v_obs
+                }
+                
+                # 3. Envia para a planilha
                 for col, val in updates.items():
-                    if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], str(val))
-                st.success("Salvo!"); st.rerun()
+                    if col in cols_map:
+                        ws_atual.update_cell(idx_base + 2, cols_map[col], str(val))
+                
+                st.success("Salvo com sucesso!"); st.rerun()
+
+        # --- FORA DO BOTÃO (Para o quadro estar sempre visível abaixo do formulário) ---
         st.divider()
+        
+        # Configuração de data para o quadro (DD/MM/YYYY)
+        col_dates_cfg = {
+            "PREVISTO": st.column_config.DateColumn(format="DD/MM/YYYY"),
+            "DATA INIC PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
+            "DATA FIM PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
+            "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY"),
+        }
+
+        st.dataframe(
+            df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], 
+            use_container_width=True, 
+            hide_index=True, 
+            column_config={**cfg_rel, **col_dates_cfg}
+        )
         
         # Configuração para forçar formato brasileiro nas colunas de data
         col_dates_cfg = {
