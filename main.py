@@ -13,18 +13,30 @@ from datetime import datetime, timedelta
 st.set_page_config(page_title="SISTEMA G-MONT", layout="wide")
 DATA_INICIO_OBRA = datetime(2025, 9, 29) 
 
-/* Faz a imagem da sidebar ocupar 100% da largura do container */
+# --- CSS PARA PADRONIZAÇÃO E ALINHAMENTO ---
+st.markdown("""
+    <style>
+    /* Ajuste da Logo para preencher a sidebar */
     [data-testid="stSidebar"] [data-testid="stImage"] img {
         width: 100% !important;
         height: auto !important;
-        border-radius: 5px; /* Opcional: arredonda levemente as pontas */
+        border-radius: 0px !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stImage"] {
+        text-align: center;
+        padding: 0px !important;
+        margin-top: -30px !important; /* Sobe a logo para o topo */
     }
     
-    /* Remove o padding lateral excessivo apenas da parte da imagem */
-    [data-testid="stSidebar"] [data-testid="stImage"] {
-        padding: 0px !important;
-        margin-bottom: 20px !important;
-    }
+    /* Padronização de inputs */
+    [data-testid="column"] { padding-left: 5px !important; padding-right: 5px !important; }
+    .stDateInput div, .stTextInput div, .stNumberInput div, .stSelectbox div { height: 45px !important; }
+    label p { font-weight: bold !important; font-size: 14px !important; min-height: 25px; margin-bottom: 5px !important; }
+    
+    /* Cores de inputs desabilitados */
+    input:disabled { background-color: #1e293b !important; color: #60a5fa !important; opacity: 1 !important; }
+    </style>
+    """, unsafe_allow_html=True)
 
 # --- CONTROLE DE ACESSO ---
 if 'logado' not in st.session_state: st.session_state['logado'] = False
