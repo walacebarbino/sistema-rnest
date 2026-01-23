@@ -132,8 +132,7 @@ if not df_atual.empty:
         "DOCUMENTO": st.column_config.TextColumn(width="medium")
     }
 
-   # --- ABA 1: EDIÇÃO E QUADRO ---
-# --- ABA 1: EDIÇÃO E QUADRO ---
+  # --- ABA 1: EDIÇÃO E QUADRO ---
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"📝 Edição por TAG - {disc}")
         c_tag, c_sem = st.columns([2, 1])
@@ -173,21 +172,21 @@ if not df_atual.empty:
                     if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], str(val))
                 st.success("Salvo com sucesso!"); st.rerun()
 
-        # --- GERENCIAMENTO DE TAGS (INSERIDO NO QUADRO) ---
+        # --- GERENCIAMENTO DE TAGS (DENTRO DO QUADRO) ---
         st.divider()
         col_adm1, col_adm2, col_adm3 = st.columns([1, 1, 2])
         
         with col_adm1:
             if st.button("➕ ADICIONAR NOVO TAG", use_container_width=True):
-                # Cria linha com colunas vazias respeitando sua tabela do Sheets
+                # Cria linha com 17 campos respeitando sua base de dados
                 nova_linha = ["NOVO_TAG_" + datetime.now().strftime("%H%M%S"), "", "", "", "", "", "AGUARDANDO PROG", disc, "", "", "", "", "", "", "", "", ""]
                 ws_atual.append_row(nova_linha)
-                st.success("Linha criada!"); st.rerun()
+                st.success("TAG Criado! Selecione na lista acima para editar."); st.rerun()
 
         with col_adm2:
             if st.button("🗑️ EXCLUIR TAG SELECIONADO", use_container_width=True):
-                st.error(f"Excluir {tag_sel}?")
-                if st.checkbox("Confirmo exclusão"):
+                st.error(f"Deseja excluir permanentemente o TAG: {tag_sel}?")
+                if st.checkbox("Sim, eu confirmo a exclusão definitiva"):
                     try:
                         celula = ws_atual.find(tag_sel)
                         ws_atual.delete_rows(celula.row)
@@ -196,6 +195,7 @@ if not df_atual.empty:
                         st.error("Erro ao localizar.")
 
         st.divider()
+        # --- TABELA DE VISUALIZAÇÃO ---
         col_dates_cfg = {
             "PREVISTO": st.column_config.DateColumn(format="DD/MM/YYYY"),
             "DATA INIC PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
@@ -205,11 +205,8 @@ if not df_atual.empty:
         st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], 
                      use_container_width=True, hide_index=True, column_config={**cfg_rel, **col_dates_cfg})
 
-    # --- ABA 2: CURVA S (CERTIFIQUE-SE QUE ESTE 'ELIF' ESTÁ ALINHADO COM O 'IF' DA ABA 1) ---
-    elif aba == "📊 CURVA S":
-
     
-    # --- ABA 2: CURVA S ---
+    # --- ABA 2: CURVA S (Mantenha este elif alinhado com o if da Aba 1) ---
     elif aba == "📊 CURVA S":
         st.subheader(f"📊 Curva S e Avanço - {disc}")
         total_t = len(df_atual)
