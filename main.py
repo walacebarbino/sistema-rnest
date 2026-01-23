@@ -157,9 +157,8 @@ if not df_atual.empty:
                     if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], str(val))
                 st.success("Salvo!"); st.rerun()
         st.divider()
-        st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'STATUS', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']], 
-                     use_container_width=True, hide_index=True, column_config=cfg_rel)
-
+        st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], 
+             use_container_width=True, hide_index=True, column_config=cfg_rel)
     # --- ABA 2: CURVA S ---
     elif aba == "📊 CURVA S":
         st.subheader(f"📊 Curva S e Avanço - {disc}")
