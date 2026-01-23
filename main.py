@@ -136,12 +136,15 @@ if not df_atual.empty:
     # --- ABA 1: EDIÇÃO E QUADRO ---
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"📝 Edição por TAG - {disc}")
+        
+        # --- PARTE SUPERIOR: SELEÇÃO E EDIÇÃO ---
         c_tag, c_sem = st.columns([2, 1])
         with c_tag:
-            tag_sel = st.selectbox("Selecione o TAG:", sorted(df_atual['TAG'].unique()))
+            tag_sel = st.selectbox("Selecione para EDITAR:", sorted(df_atual['TAG'].unique()))
         
         idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
         dados_tag = df_atual.iloc[idx_base]
+        
         with c_sem:
             sem_input = st.text_input("Semana da Obra:", value=dados_tag['SEMANA OBRA'])
         
@@ -162,7 +165,7 @@ if not df_atual.empty:
             st.info(f"Status Atualizado: **{st_atual}**")
             v_obs = st.text_input("Observações:", value=dados_tag['OBS'])
             
-            if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
+            if st.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
                 f_prev = v_prev.strftime("%d/%m/%Y") if v_prev else ""
                 f_ini = v_ini.strftime("%d/%m/%Y") if v_ini else ""
                 f_fim = v_fim.strftime("%d/%m/%Y") if v_fim else ""
@@ -173,8 +176,56 @@ if not df_atual.empty:
                     if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], str(val))
                 st.success("Salvo com sucesso!"); st.rerun()
 
+        # --- MEIO: ÁREA DE CADASTRAMENTO E EXCLUSÃO ---
+        st.divider()
+        col_cad, col_del = st.columns(2)
+
+        with col_cad:
+            with st.expander("➕ CADASTRAR NOVO TAG", expanded=False):
+                with st.form("form_novo_tag"):
+                    c1, c2 = st.columns(2)
+                    n_tag = c1.text_input("TAG *")
+                    n_disc = c2.text_input("DISCIPLINA", value=disc)
+                    n_desc = st.text_input("DESCRIÇÃO")
+                    
+                    c3, c4, c5 = st.columns(3)
+                    n_fam = c3.text_input("FAMÍLIA")
+                    n_uni = c4.text_input("UNIDADE")
+                    n_area = c5.text_input("ÁREA")
+                    
+                    n_des = st.text_input("DESENHO (DOC)")
+                    
+                    if st.form_submit_button("🚀 CADASTRAR NO BANCO"):
+                        if n_tag:
+                            # Montando a linha conforme a estrutura da sua planilha
+                            # Ajuste a ordem conforme necessário: TAG, SEMANA, INIC, FIM, PREV, MONT, STATUS, DISC, DESC, AREA, DOC...
+                            nova_linha = [n_tag, "", "", "", "", "", "AGUARDANDO PROG", n_disc, n_desc, n_area, n_des, n_fam, "", n_uni, "", "", ""]
+                            ws_atual.append_row(nova_linha)
+                            st.success(f"TAG {n_tag} cadastrado!"); st.rerun()
+                        else:
+                            st.error("O campo TAG é obrigatório.")
+
+        with col_del:
+            with st.expander("🗑️ DELETAR TAG DO BANCO", expanded=False):
+                tag_para_deletar = st.selectbox("Selecione a TAG para DELETAR:", [""] + sorted(df_atual['TAG'].unique().tolist()))
+                if tag_para_deletar:
+                    st.warning(f"Isso excluirá permanentemente a TAG: {tag_para_deletar}")
+                    confirm_del = st.checkbox("Eu confirmo a exclusão")
+                    if st.button("🔴 CONFIRMAR EXCLUSÃO", use_container_width=True):
+                        if confirm_del:
+                            cell = ws_atual.find(tag_para_deletar, in_column=1)
+                            if cell:
+                                ws_atual.delete_rows(cell.row)
+                                st.success(f"TAG {tag_para_deletar} removida!"); st.rerun()
+                            else:
+                                st.error("TAG não encontrada.")
+                        else:
+                            st.info("Marque o checkbox de confirmação.")
+
+        # --- PARTE INFERIOR: QUADRO (DATAFRAME) ---
         st.divider()
         col_dates_cfg = {
+            "TAG": st.column_config.TextColumn("TAG", help="Clique e arraste para copiar"),
             "PREVISTO": st.column_config.DateColumn(format="DD/MM/YYYY"),
             "DATA INIC PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
             "DATA FIM PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
