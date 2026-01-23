@@ -34,7 +34,7 @@ def tela_login():
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
         try:
-            st.image("LOGO2.png", width=200)
+            st.image("LOGO2.png", width=100)
         except:
             pass
         st.subheader("🔐 ACESSO RESTRITO G-MONT")
