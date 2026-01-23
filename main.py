@@ -89,9 +89,15 @@ def calcular_status_tag(d_i, d_f, d_m):
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
+# --- AJUSTE 3: RESTAURAÇÃO DA LOGO NA SIDEBAR ---
+try:
+    st.sidebar.image("logo.png", use_container_width=True)
+except:
+    st.sidebar.markdown("### 🏗️ G-MONT Engenharia")
+
 st.sidebar.subheader("MENU G-MONT")
 disc = st.sidebar.selectbox("DISCIPLINA:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
-aba = st.sidebar.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 CARGA EM MASSA"])
+aba = st.sidebar.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 EXPORTAÇÃO E IMPORTAÇÕES"])
 
 df_atual = df_ele if disc == "ELÉTRICA" else df_ins
 ws_atual = ws_ele if disc == "ELÉTRICA" else ws_ins
@@ -182,7 +188,6 @@ if not df_atual.empty:
 
         st.divider()
         st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
-        # AJUSTE: TAG, DESCRIÇÃO, DATA MONT, ÁREA, STATUS e OBS
         cols_pendencias = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
         df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
         st.dataframe(df_pend[cols_pendencias], use_container_width=True, hide_index=True)
@@ -193,28 +198,37 @@ if not df_atual.empty:
         st.markdown("### 📈 AVANÇO SEMANAL (REALIZADO 7 DIAS)")
         df_atual['DT_TEMP'] = pd.to_datetime(df_atual['DATA MONT'], dayfirst=True, errors='coerce')
         df_setec = df_atual[df_atual['DT_TEMP'] >= (datetime.now() - timedelta(days=7))]
-        # AJUSTE: TAG, DESCRIÇÃO, DATA MONT, ÁREA, STATUS e OBS
         cols_avanco = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
         st.dataframe(df_setec[cols_avanco], use_container_width=True, hide_index=True)
         buf_r = BytesIO(); df_setec[cols_avanco].to_excel(buf_r, index=False)
         st.download_button("📥 EXPORTAR AVANÇO SEMANAL", buf_r.getvalue(), f"Realizado_7_dias_{disc}.xlsx")
 
-    # --- ABA 4: CARGA EM MASSA ---
-    elif aba == "📤 CARGA EM MASSA":
-        st.subheader(f"📤 Carga em Massa - {disc}")
-        c_m1, c_m2 = st.columns(2)
-        with c_m1:
+    # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES (AJUSTES SOLICITADOS) ---
+    elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
+        st.subheader(f"📤 Gestão de Dados - {disc}")
+        
+        # AJUSTE 2: TRÊS COLUNAS EM LINHA
+        c1, c2, c3 = st.columns(3)
+        
+        with c1:
+            st.markdown("### 📄 Modelo")
             mod = df_atual[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']].head(5)
-            b_m = BytesIO(); mod.to_excel(b_m, index=False); st.download_button("📥 Baixar Modelo", b_m.getvalue(), "modelo.xlsx")
-        with c_m2:
-            b_f = BytesIO(); df_atual.to_excel(b_f, index=False); st.download_button("📥 Exportar Base", b_f.getvalue(), "base.xlsx")
-        st.divider()
-        up = st.file_uploader("Upload Excel:", type="xlsx")
-        if up and st.button("🚀 EXECUTAR CARGA"):
-            df_up = pd.read_excel(up).astype(str).replace('nan', '')
-            for _, r in df_up.iterrows():
-                if r['TAG'] in df_atual['TAG'].values:
-                    ln = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
-                    for c in df_up.columns:
-                        if c in cols_map: ws_atual.update_cell(ln, cols_map[c], r[c])
-            st.success("Importado!"); st.rerun()
+            b_m = BytesIO(); mod.to_excel(b_m, index=False)
+            st.download_button("📥 EXPORTAR MOD PLANILHA", b_m.getvalue(), "modelo_gmont.xlsx", use_container_width=True)
+            
+        with c2:
+            st.markdown("### 🚀 Importar")
+            up = st.file_uploader("Selecione o arquivo Excel:", type="xlsx", label_visibility="collapsed")
+            if up and st.button("🚀 IMPORTAR DADOS", use_container_width=True):
+                df_up = pd.read_excel(up).astype(str).replace('nan', '')
+                for _, r in df_up.iterrows():
+                    if r['TAG'] in df_atual['TAG'].values:
+                        ln = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
+                        for c in df_up.columns:
+                            if c in cols_map: ws_atual.update_cell(ln, cols_map[c], r[c])
+                st.success("Dados Importados com Sucesso!"); st.rerun()
+
+        with c3:
+            st.markdown("### 💾 Backup")
+            b_f = BytesIO(); df_atual.to_excel(b_f, index=False)
+            st.download_button("📥 EXPORTAR BASE COMPLETA", b_f.getvalue(), f"Base_{disc}_Backup.xlsx", use_container_width=True)
