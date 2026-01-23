@@ -17,7 +17,6 @@ st.markdown("""
     <style>
     [data-testid="column"] { padding-left: 5px !important; padding-right: 5px !important; }
     .stDateInput div, .stTextInput div, .stNumberInput div, .stSelectbox div { height: 45px !important; }
-    /* Força o alinhamento vertical das caixas de texto e select */
     div[data-testid="stForm"] > div { align-items: center; }
     label p { font-weight: bold !important; font-size: 14px !important; min-height: 25px; margin-bottom: 5px !important; }
     input:disabled { background-color: #1e293b !important; color: #60a5fa !important; opacity: 1 !important; }
@@ -105,7 +104,6 @@ if not df_atual.empty:
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"📝 Edição por TAG - {disc}")
         
-        # AJUSTE 2: ALINHAMENTO DAS CAIXAS TAG E SEMANA
         col_edit_top = st.container()
         with col_edit_top:
             c_tag, c_sem = st.columns([2, 1])
@@ -181,7 +179,6 @@ if not df_atual.empty:
         df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
         if sem_f != "TODAS": df_p = df_p[df_p['SEMANA OBRA'] == sem_f]
         
-        # AJUSTE 1: INFORMAÇÕES DO RELATÓRIO DE PRODUÇÃO
         cols_producao = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
         st.dataframe(df_p[cols_producao], use_container_width=True, hide_index=True)
         
@@ -190,9 +187,12 @@ if not df_atual.empty:
 
         st.divider()
         st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
+        # AJUSTE 1: MESMAS COLUNAS DE PROGRAMADO + STATUS
+        cols_pendencias = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO', 'STATUS']
         df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
-        st.dataframe(df_pend[['TAG', 'STATUS', 'ÁREA', 'OBS']], use_container_width=True, hide_index=True)
-        buf_pe = BytesIO(); df_pend.to_excel(buf_pe, index=False)
+        st.dataframe(df_pend[cols_pendencias], use_container_width=True, hide_index=True)
+        
+        buf_pe = BytesIO(); df_pend[cols_pendencias].to_excel(buf_pe, index=False)
         st.download_button("📥 EXPORTAR PENDÊNCIAS", buf_pe.getvalue(), f"Pendencias_{disc}.xlsx")
 
         st.divider()
