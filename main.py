@@ -80,20 +80,6 @@ def extrair_dados(nome_planilha):
         return pd.DataFrame(), None
     except: return pd.DataFrame(), None
 
-# --- CONFIGURAÇÃO DE LARGURA DE COLUNAS ---
-CONFIG_COLUNAS = {
-    "TAG": st.column_config.TextColumn("TAG", width="medium", required=True),
-    "SEMANA OBRA": st.column_config.TextColumn("SEM", width="small"),
-    "DESCRIÇÃO": st.column_config.TextColumn("DESCRIÇÃO", width="large"),
-    "ÁREA": st.column_config.TextColumn("ÁREA", width="small"),
-    "STATUS": st.column_config.TextColumn("STATUS", width="medium"),
-    "DATA INIC PROG": st.column_config.TextColumn("INÍCIO", width="small"),
-    "DATA FIM PROG": st.column_config.TextColumn("FIM", width="small"),
-    "DATA MONT": st.column_config.TextColumn("MONTAGEM", width="small"),
-    "DOCUMENTO": st.column_config.TextColumn("DOC", width="medium"),
-    "OBS": st.column_config.TextColumn("OBSERVAÇÕES", width="large"),
-}
-
 # --- LÓGICA DE APOIO ---
 def get_dates_from_week(week_number):
     if not str(week_number).isdigit(): return None, None
@@ -111,7 +97,7 @@ def calcular_status_tag(d_i, d_f, d_m):
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
-# --- LOGO ---
+# --- LOGO (REDUZIDA) ---
 try:
     st.sidebar.image("LOGO2.png", width=120)
 except:
@@ -165,8 +151,7 @@ if not df_atual.empty:
                 st.success("Salvo!"); st.rerun()
         st.divider()
         st.markdown(f"### 📋 QUADRO GERAL - {disc}")
-        st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'STATUS', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']], 
-                     use_container_width=True, hide_index=True, column_config=CONFIG_COLUNAS)
+        st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'STATUS', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']], use_container_width=True, hide_index=True)
 
     # --- ABA 2: CURVA S ---
     elif aba == "📊 CURVA S":
@@ -208,20 +193,26 @@ if not df_atual.empty:
         df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
         if sem_f != "TODAS": df_p = df_p[df_p['SEMANA OBRA'] == sem_f]
         cols_producao = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
-        st.dataframe(df_p[cols_producao], use_container_width=True, hide_index=True, column_config=CONFIG_COLUNAS)
+        st.dataframe(df_p[cols_producao], use_container_width=True, hide_index=True)
+        buf_p = BytesIO(); df_p[cols_producao].to_excel(buf_p, index=False)
+        st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", buf_p.getvalue(), f"Programado_{disc}.xlsx")
 
         st.divider()
         st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
         cols_pendencias = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
         df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
-        st.dataframe(df_pend[cols_pendencias], use_container_width=True, hide_index=True, column_config=CONFIG_COLUNAS)
+        st.dataframe(df_pend[cols_pendencias], use_container_width=True, hide_index=True)
+        buf_pe = BytesIO(); df_pend[cols_pendencias].to_excel(buf_pe, index=False)
+        st.download_button("📥 EXPORTAR PENDÊNCIAS", buf_pe.getvalue(), f"Pendencias_{disc}.xlsx")
 
         st.divider()
         st.markdown("### 📈 AVANÇO SEMANAL (REALIZADO 7 DIAS)")
         df_atual['DT_TEMP'] = pd.to_datetime(df_atual['DATA MONT'], dayfirst=True, errors='coerce')
         df_setec = df_atual[df_atual['DT_TEMP'] >= (datetime.now() - timedelta(days=7))]
         cols_avanco = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
-        st.dataframe(df_setec[cols_avanco], use_container_width=True, hide_index=True, column_config=CONFIG_COLUNAS)
+        st.dataframe(df_setec[cols_avanco], use_container_width=True, hide_index=True)
+        buf_r = BytesIO(); df_setec[cols_avanco].to_excel(buf_r, index=False)
+        st.download_button("📥 EXPORTAR AVANÇO SEMANAL", buf_r.getvalue(), f"Realizado_7_dias_{disc}.xlsx")
 
     # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
