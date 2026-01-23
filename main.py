@@ -95,10 +95,8 @@ df_ins, ws_ins = extrair_dados("BD_INST")
 try:
     st.sidebar.image("LOGO2.png", width=120)
 except:
-    try:
-        st.sidebar.image("logo2.png", width=120)
-    except:
-        st.sidebar.markdown("### G-MONT")
+    try: st.sidebar.image("logo2.png", width=120)
+    except: st.sidebar.markdown("### G-MONT")
 
 st.sidebar.subheader("MENU G-MONT")
 disc = st.sidebar.selectbox("DISCIPLINA:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
@@ -107,17 +105,19 @@ aba = st.sidebar.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S"
 df_atual = df_ele if disc == "ELÉTRICA" else df_ins
 ws_atual = ws_ele if disc == "ELÉTRICA" else ws_ins
 
+# --- CONFIGURAÇÃO DE LARGURA PADRÃO ---
+cfg_rel = {
+    "TAG": st.column_config.TextColumn(width="medium"),
+    "DESCRIÇÃO": st.column_config.TextColumn(width="large"),
+    "OBS": st.column_config.TextColumn(width="large"),
+    "DOCUMENTO": st.column_config.TextColumn(width="medium"),
+    "STATUS": st.column_config.TextColumn(width="medium"),
+    "SEMANA OBRA": st.column_config.TextColumn(width="small"),
+}
+
 if not df_atual.empty:
     df_atual['STATUS'] = df_atual.apply(lambda r: calcular_status_tag(r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT','')), axis=1)
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
-
-    # --- CONFIGURAÇÃO DE LARGURA PADRÃO ---
-    cfg_rel = {
-        "TAG": st.column_config.TextColumn(width="medium"),
-        "DESCRIÇÃO": st.column_config.TextColumn(width="large"),
-        "OBS": st.column_config.TextColumn(width="large"),
-        "DOCUMENTO": st.column_config.TextColumn(width="medium")
-    }
 
     # --- ABA 1: EDIÇÃO E QUADRO ---
     if aba == "📝 EDIÇÃO E QUADRO":
@@ -197,16 +197,14 @@ if not df_atual.empty:
         if sem_f != "TODAS": df_p = df_p[df_p['SEMANA OBRA'] == sem_f]
         cols_p = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
         st.dataframe(df_p[cols_p], use_container_width=True, hide_index=True, column_config=cfg_rel)
-        buf_p = BytesIO(); df_p[cols_p].to_excel(buf_p, index=False)
-        st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", buf_p.getvalue(), f"Programado_{disc}.xlsx")
+        buf_p = BytesIO(); df_p[cols_p].to_excel(buf_p, index=False); st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", buf_p.getvalue(), f"Programado_{disc}.xlsx")
 
         st.divider()
         st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
         df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
         cols_pend = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
         st.dataframe(df_pend[cols_pend], use_container_width=True, hide_index=True, column_config=cfg_rel)
-        buf_pe = BytesIO(); df_pend[cols_pend].to_excel(buf_pe, index=False)
-        st.download_button("📥 EXPORTAR PENDÊNCIAS", buf_pe.getvalue(), f"Pendencias_{disc}.xlsx")
+        buf_pe = BytesIO(); df_pend[cols_pend].to_excel(buf_pe, index=False); st.download_button("📥 EXPORTAR PENDÊNCIAS", buf_pe.getvalue(), f"Pendencias_{disc}.xlsx")
 
         st.divider()
         st.markdown("### 📈 AVANÇO SEMANAL (REALIZADO 7 DIAS)")
@@ -214,62 +212,40 @@ if not df_atual.empty:
         df_setec = df_atual[df_atual['DT_TEMP'] >= (datetime.now() - timedelta(days=7))]
         cols_av = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
         st.dataframe(df_setec[cols_av], use_container_width=True, hide_index=True, column_config=cfg_rel)
-        buf_r = BytesIO(); df_setec[cols_av].to_excel(buf_r, index=False)
-        st.download_button("📥 EXPORTAR AVANÇO SEMANAL", buf_r.getvalue(), f"Realizado_7_dias_{disc}.xlsx")
+        buf_r = BytesIO(); df_setec[cols_av].to_excel(buf_r, index=False); st.download_button("📥 EXPORTAR AVANÇO SEMANAL", buf_r.getvalue(), f"Realizado_7_dias_{disc}.xlsx")
 
-    # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES (VERSÃO REVISADA) ---
+    # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
-        st.subheader(f"📤 Exportações e Importações - {disc}")
+        st.subheader(f"📤 Gestão de Dados - {disc}")
         c1, c2, c3 = st.columns(3)
         with c1:
             st.info("📄 **MODELO**")
-            # Exporta as colunas necessárias para o modelo
             mod = df_atual[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']].head(5)
             b_m = BytesIO(); mod.to_excel(b_m, index=False)
             st.download_button("📥 EXPORTAR MOD PLANILHA", b_m.getvalue(), "modelo_gmont.xlsx", use_container_width=True)
-        
         with c2:
             st.info("🚀 **IMPORTAÇÃO**")
             up = st.file_uploader("Upload Excel:", type="xlsx", label_visibility="collapsed")
-            if up:
-                if st.button("🚀 IMPORTAR DADOS", use_container_width=True):
-                    try:
-                        # Lê o Excel e remove espaços em branco dos nomes das colunas
-                        df_up = pd.read_excel(up)
-                        df_up.columns = df_up.columns.str.strip()
-                        df_up = df_up.astype(str).replace('nan', '')
-                        
-                        sucesso = 0
-                        erros = 0
-                        
-                        # Processo de atualização
-                        for _, r in df_up.iterrows():
-                            tag_import = str(r['TAG']).strip()
-                            if tag_import in df_atual['TAG'].values:
-                                # Localiza a linha correta (index + 2 pois o Sheets começa em 1 e tem cabeçalho)
-                                ln = df_atual.index[df_atual['TAG'] == tag_import][0] + 2
-                                
-                                # Lista de colunas para atualizar
-                                colunas_para_subir = ['SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
-                                
-                                for col in colunas_para_subir:
-                                    if col in df_up.columns and col in cols_map:
-                                        ws_atual.update_cell(ln, cols_map[col], str(r[col]))
-                                sucesso += 1
-                            else:
-                                erros += 1
-                        
-                        if sucesso > 0:
-                            st.success(f"✅ {sucesso} TAGs atualizadas com sucesso!")
-                            if erros > 0:
-                                st.warning(f"⚠️ {erros} TAGs não foram encontradas na base principal.")
-                            st.rerun()
-                        else:
-                            st.error("❌ Nenhuma TAG correspondente foi encontrada no arquivo subido.")
-                            
-                    except Exception as e:
-                        st.error(f"Erro durante a importação: {e}")
-        
+            if up and st.button("🚀 IMPORTAR DADOS", use_container_width=True):
+                try:
+                    df_up = pd.read_excel(up)
+                    df_up.columns = df_up.columns.str.strip().str.upper()
+                    sucesso = 0
+                    for _, r in df_up.iterrows():
+                        tag_ex = str(r.get('TAG', '')).strip()
+                        if tag_ex in df_atual['TAG'].values:
+                            ln = df_atual.index[df_atual['TAG'] == tag_ex][0] + 2
+                            for col_ref in ['SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']:
+                                val = ""
+                                for c_ex in df_up.columns:
+                                    if col_ref.replace(" ", "") in c_ex.replace(" ", ""):
+                                        val = str(r[c_ex])
+                                        break
+                                if val and val != 'nan' and col_ref in cols_map:
+                                    ws_atual.update_cell(ln, cols_map[col_ref], val)
+                            sucesso += 1
+                    st.success(f"✅ {sucesso} TAGs atualizadas!"); st.rerun()
+                except Exception as e: st.error(f"Erro: {e}")
         with c3:
             st.info("💾 **BASE COMPLETA**")
             b_f = BytesIO(); df_atual.to_excel(b_f, index=False)
