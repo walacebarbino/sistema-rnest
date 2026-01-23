@@ -217,26 +217,59 @@ if not df_atual.empty:
         buf_r = BytesIO(); df_setec[cols_av].to_excel(buf_r, index=False)
         st.download_button("📥 EXPORTAR AVANÇO SEMANAL", buf_r.getvalue(), f"Realizado_7_dias_{disc}.xlsx")
 
-    # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
+    # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES (VERSÃO REVISADA) ---
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
         st.subheader(f"📤 Exportações e Importações - {disc}")
         c1, c2, c3 = st.columns(3)
         with c1:
             st.info("📄 **MODELO**")
+            # Exporta as colunas necessárias para o modelo
             mod = df_atual[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']].head(5)
             b_m = BytesIO(); mod.to_excel(b_m, index=False)
             st.download_button("📥 EXPORTAR MOD PLANILHA", b_m.getvalue(), "modelo_gmont.xlsx", use_container_width=True)
+        
         with c2:
             st.info("🚀 **IMPORTAÇÃO**")
             up = st.file_uploader("Upload Excel:", type="xlsx", label_visibility="collapsed")
-            if up and st.button("🚀 IMPORTAR DADOS", use_container_width=True):
-                df_up = pd.read_excel(up).astype(str).replace('nan', '')
-                for _, r in df_up.iterrows():
-                    if r['TAG'] in df_atual['TAG'].values:
-                        ln = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
-                        for c in df_up.columns:
-                            if c in cols_map: ws_atual.update_cell(ln, cols_map[c], r[c])
-                st.success("Dados Atualizados!"); st.rerun()
+            if up:
+                if st.button("🚀 IMPORTAR DADOS", use_container_width=True):
+                    try:
+                        # Lê o Excel e remove espaços em branco dos nomes das colunas
+                        df_up = pd.read_excel(up)
+                        df_up.columns = df_up.columns.str.strip()
+                        df_up = df_up.astype(str).replace('nan', '')
+                        
+                        sucesso = 0
+                        erros = 0
+                        
+                        # Processo de atualização
+                        for _, r in df_up.iterrows():
+                            tag_import = str(r['TAG']).strip()
+                            if tag_import in df_atual['TAG'].values:
+                                # Localiza a linha correta (index + 2 pois o Sheets começa em 1 e tem cabeçalho)
+                                ln = df_atual.index[df_atual['TAG'] == tag_import][0] + 2
+                                
+                                # Lista de colunas para atualizar
+                                colunas_para_subir = ['SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
+                                
+                                for col in colunas_para_subir:
+                                    if col in df_up.columns and col in cols_map:
+                                        ws_atual.update_cell(ln, cols_map[col], str(r[col]))
+                                sucesso += 1
+                            else:
+                                erros += 1
+                        
+                        if sucesso > 0:
+                            st.success(f"✅ {sucesso} TAGs atualizadas com sucesso!")
+                            if erros > 0:
+                                st.warning(f"⚠️ {erros} TAGs não foram encontradas na base principal.")
+                            st.rerun()
+                        else:
+                            st.error("❌ Nenhuma TAG correspondente foi encontrada no arquivo subido.")
+                            
+                    except Exception as e:
+                        st.error(f"Erro durante a importação: {e}")
+        
         with c3:
             st.info("💾 **BASE COMPLETA**")
             b_f = BytesIO(); df_atual.to_excel(b_f, index=False)
