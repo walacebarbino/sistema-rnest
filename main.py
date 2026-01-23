@@ -24,7 +24,7 @@ def tela_login():
             st.image("LOGO2.png", width=120)
         except:
             pass
-        st.subheader("🔐 ACESSO RESTRITO G-MONT")
+        st.subheader("🔐 LOGIN G-MONT")
         pin = st.text_input("Digite o PIN:", type="password", max_chars=4)
         if st.button("ENTRAR NO SISTEMA", use_container_width=True):
             if pin == "1234":
@@ -95,7 +95,7 @@ disc = st.sidebar.selectbox("DISCIPLINA:", ["ELÉTRICA", "INSTRUMENTAÇÃO", "ES
 aba = st.sidebar.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 EXPORTAÇÃO E IMPORTAÇÕES"])
 
 st.sidebar.divider()
-if st.sidebar.button("🚪 SAIR DO SISTEMA", use_container_width=True):
+if st.sidebar.button("🚪 SAIR", use_container_width=True):
     st.session_state['logado'] = False
     st.rerun()
 
