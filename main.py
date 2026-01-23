@@ -236,23 +236,22 @@ if not df_atual.empty:
                             colunas_alvo = ['SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
                             
                             sucesso = 0
-                            # Atualiza a lista na memória (sem chamar a API do Google ainda)
+                            # Atualiza a lista na memória
                             for _, r in df_up.iterrows():
                                 tag_import = str(r['TAG']).strip()
                                 for i, row in enumerate(lista_mestra[1:]):
                                     if str(row[0]).strip() == tag_import:
                                         for col in colunas_alvo:
                                             if col in df_up.columns and col in idx_map:
-                                                val = str(r[col]).replace('nan', '').replace('NaN', '').strip()
+                                                val = str(r[col]).replace('nan', '').replace('NaN', '').replace('NaT', '').strip()
                                                 lista_mestra[i+1][idx_map[col]] = val
                                         sucesso += 1
                                         break
 
-                            # ENVIA TUDO DE UMA VEZ SÓ (1 ÚNICA REQUISIÇÃO)
+                            # ENVIA TUDO DE UMA VEZ SÓ
                             ws_atual.update('A1', lista_mestra)
                             
-                            st.success(f"✅ {sucesso} TAGs atualizadas sem erro de cota!")
-                            time.sleep(2)
+                            st.success(f"✅ {sucesso} TAGs atualizadas com sucesso!")
                             st.rerun()
                             
                     except Exception as e:
