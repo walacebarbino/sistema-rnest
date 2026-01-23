@@ -62,18 +62,34 @@ def extrair_dados(nome_planilha):
     try:
         sh = client.open(nome_planilha)
         ws = sh.get_worksheet(0)
-        data = ws.get_all_values()
-        if len(data) > 1:
+        
+        # Tenta buscar pelo nome do intervalo "DADOS" que você criou no Google
+        try:
+            # Puxa apenas o quadrado nomeado, ignorando o resto da planilha
+            data = ws.get('DADOS') 
+        except:
+            # Se não achar o intervalo "DADOS", puxa tudo (padrão antigo)
+            data = ws.get_all_values()
+
+        if data and len(data) > 1:
             df = pd.DataFrame(data[1:], columns=data[0])
             df.columns = df.columns.str.strip()
+            
+            # Garante que as colunas obrigatórias existam para não dar erro
             col_obj = ['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
             for c in col_obj:
                 if c not in df.columns: df[c] = ""
+            
+            # LIMPEZA PESADA: Transforma tudo em texto e remove qualquer valor 'nan'
             for c in df.columns:
-                df[c] = df[c].astype(str).str.strip().replace(['nan', 'None', 'NaT', '-'], '')
+                df[c] = df[c].astype(str).str.strip().replace(['nan', 'None', 'NaT', '-', 'NaN'], '')
+            
             return df, ws
         return pd.DataFrame(), None
-    except: return pd.DataFrame(), None
+    except Exception as e:
+        # Mostra o erro na tela se algo der muito errado
+        st.error(f"Erro ao ler os dados: {e}")
+        return pd.DataFrame(), None
 
 # --- LÓGICA DE APOIO ---
 def get_dates_from_week(week_number):
