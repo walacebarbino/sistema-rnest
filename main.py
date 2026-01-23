@@ -223,44 +223,40 @@ if not df_atual.empty:
             if up:
                 if st.button("🚀 IMPORTAR DADOS", use_container_width=True):
                     try:
-                        # Lê o arquivo e garante que nada seja lido como NaN matemático
-                        df_up = pd.read_excel(up).fillna('')
-                        df_up.columns = df_up.columns.str.strip()
-                        
-                        if 'TAG' not in df_up.columns:
-                            st.error("❌ O arquivo não tem a coluna 'TAG'!")
-                        else:
+                        with st.spinner('Sincronizando em massa para evitar bloqueio...'):
+                            df_up = pd.read_excel(up).fillna('')
+                            df_up.columns = df_up.columns.str.strip()
+                            
+                            # Baixa os dados atuais da planilha para a memória
+                            lista_mestra = ws_atual.get_all_values()
+                            headers = lista_mestra[0]
+                            
+                            # Mapeia as colunas do Sheets
+                            idx_map = {name: i for i, name in enumerate(headers)}
+                            colunas_alvo = ['SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
+                            
                             sucesso = 0
-                            tags_nao_encontradas = []
-                            
-                            with st.spinner('Enviando dados para o Google Sheets...'):
-                                for _, r in df_up.iterrows():
-                                    tag_import = str(r['TAG']).strip()
-                                    if tag_import in df_atual['TAG'].values:
-                                        # Pega a linha exata no Google Sheets
-                                        ln = df_atual.index[df_atual['TAG'] == tag_import][0] + 2
-                                        colunas = ['SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
-                                        
-                                        for col in colunas:
-                                            if col in df_up.columns and col in cols_map:
-                                                # Converte o valor para string limpa
-                                                valor = str(r[col]).replace('nan', '').replace('NaN', '').strip()
-                                                ws_atual.update_cell(ln, cols_map[col], valor)
+                            # Atualiza a lista na memória (sem chamar a API do Google ainda)
+                            for _, r in df_up.iterrows():
+                                tag_import = str(r['TAG']).strip()
+                                for i, row in enumerate(lista_mestra[1:]):
+                                    if str(row[0]).strip() == tag_import:
+                                        for col in colunas_alvo:
+                                            if col in df_up.columns and col in idx_map:
+                                                val = str(r[col]).replace('nan', '').replace('NaN', '').strip()
+                                                lista_mestra[i+1][idx_map[col]] = val
                                         sucesso += 1
-                                    else:
-                                        tags_nao_encontradas.append(tag_import)
+                                        break
+
+                            # ENVIA TUDO DE UMA VEZ SÓ (1 ÚNICA REQUISIÇÃO)
+                            ws_atual.update('A1', lista_mestra)
                             
-                            if sucesso > 0:
-                                st.success(f"✅ {sucesso} TAGs atualizadas com sucesso!")
-                                if tags_nao_encontradas:
-                                    st.warning(f"⚠️ As seguintes TAGs não foram achadas na base: {', '.join(tags_nao_encontradas)}")
-                                time.sleep(2)
-                                st.rerun()
-                            else:
-                                st.warning("⚠️ Nenhuma TAG do seu Excel foi encontrada na base de dados.")
-                                
+                            st.success(f"✅ {sucesso} TAGs atualizadas sem erro de cota!")
+                            time.sleep(2)
+                            st.rerun()
+                            
                     except Exception as e:
-                        st.error(f"❌ ERRO CRÍTICO: {e}")
+                        st.error(f"❌ ERRO: {e}")
         
         with c3:
             st.info("💾 **BASE COMPLETA**")
