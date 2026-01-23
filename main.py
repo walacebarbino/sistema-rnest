@@ -20,6 +20,7 @@ st.markdown("""
     div[data-testid="stForm"] > div { align-items: center; }
     label p { font-weight: bold !important; font-size: 14px !important; min-height: 25px; margin-bottom: 5px !important; }
     input:disabled { background-color: #1e293b !important; color: #60a5fa !important; opacity: 1 !important; }
+    .stFileUploader { margin-top: -15px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -89,11 +90,11 @@ def calcular_status_tag(d_i, d_f, d_m):
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
-# --- AJUSTE 3: RESTAURAÇÃO DA LOGO NA SIDEBAR ---
+# --- AJUSTE DA LOGO (LOGO2) ---
 try:
-    st.sidebar.image("logo.png", use_container_width=True)
+    st.sidebar.image("logo2.png", use_container_width=True)
 except:
-    st.sidebar.markdown("### 🏗️ G-MONT Engenharia")
+    st.sidebar.warning("Arquivo logo2.png não encontrado.")
 
 st.sidebar.subheader("MENU G-MONT")
 disc = st.sidebar.selectbox("DISCIPLINA:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
@@ -203,32 +204,28 @@ if not df_atual.empty:
         buf_r = BytesIO(); df_setec[cols_avanco].to_excel(buf_r, index=False)
         st.download_button("📥 EXPORTAR AVANÇO SEMANAL", buf_r.getvalue(), f"Realizado_7_dias_{disc}.xlsx")
 
-    # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES (AJUSTES SOLICITADOS) ---
+    # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
-        st.subheader(f"📤 Gestão de Dados - {disc}")
-        
-        # AJUSTE 2: TRÊS COLUNAS EM LINHA
+        st.subheader(f"📤 Exportações e Importações - {disc}")
         c1, c2, c3 = st.columns(3)
-        
         with c1:
-            st.markdown("### 📄 Modelo")
+            st.info("📄 **MODELO**")
             mod = df_atual[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']].head(5)
             b_m = BytesIO(); mod.to_excel(b_m, index=False)
             st.download_button("📥 EXPORTAR MOD PLANILHA", b_m.getvalue(), "modelo_gmont.xlsx", use_container_width=True)
-            
         with c2:
-            st.markdown("### 🚀 Importar")
-            up = st.file_uploader("Selecione o arquivo Excel:", type="xlsx", label_visibility="collapsed")
-            if up and st.button("🚀 IMPORTAR DADOS", use_container_width=True):
-                df_up = pd.read_excel(up).astype(str).replace('nan', '')
-                for _, r in df_up.iterrows():
-                    if r['TAG'] in df_atual['TAG'].values:
-                        ln = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
-                        for c in df_up.columns:
-                            if c in cols_map: ws_atual.update_cell(ln, cols_map[c], r[c])
-                st.success("Dados Importados com Sucesso!"); st.rerun()
-
+            st.info("🚀 **IMPORTAÇÃO**")
+            up = st.file_uploader("Upload Excel:", type="xlsx", label_visibility="collapsed")
+            if up:
+                if st.button("🚀 IMPORTAR DADOS", use_container_width=True):
+                    df_up = pd.read_excel(up).astype(str).replace('nan', '')
+                    for _, r in df_up.iterrows():
+                        if r['TAG'] in df_atual['TAG'].values:
+                            ln = df_atual.index[df_atual['TAG'] == r['TAG']][0] + 2
+                            for c in df_up.columns:
+                                if c in cols_map: ws_atual.update_cell(ln, cols_map[c], r[c])
+                    st.success("Dados Atualizados!"); st.rerun()
         with c3:
-            st.markdown("### 💾 Backup")
+            st.info("💾 **BASE COMPLETA**")
             b_f = BytesIO(); df_atual.to_excel(b_f, index=False)
-            st.download_button("📥 EXPORTAR BASE COMPLETA", b_f.getvalue(), f"Base_{disc}_Backup.xlsx", use_container_width=True)
+            st.download_button("📥 EXPORTAR BASE", b_f.getvalue(), f"Base_{disc}.xlsx", use_container_width=True)
