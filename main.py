@@ -127,38 +127,51 @@ if not df_atual.empty:
     }
 
     # --- ABA 1: EDIÇÃO E QUADRO ---
+   # --- ABA 1: EDIÇÃO E QUADRO ---
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"📝 Edição por TAG - {disc}")
+        
         c_tag, c_sem = st.columns([2, 1])
         with c_tag:
             tag_sel = st.selectbox("Selecione o TAG:", sorted(df_atual['TAG'].unique()))
+        
         idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
         dados_tag = df_atual.iloc[idx_base]
+        
         with c_sem:
             sem_input = st.text_input("Semana da Obra:", value=dados_tag['SEMANA OBRA'])
+        
         sug_ini, sug_fim = get_dates_from_week(sem_input)
+        
+        # INÍCIO DO FORMULÁRIO (Tudo que for edição deve estar indentado aqui dentro)
         with st.form("form_edit_final"):
             c1, c2, c3, c4 = st.columns(4)
+            
             def conv_dt(val, default):
-                try: return datetime.strptime(str(val), "%d/%m/%Y").date()
-                except: return default
-           # Ocupando as colunas na nova ordem: Previsto -> Início -> Fim -> Montagem
+                try: 
+                    return datetime.strptime(str(val), "%d/%m/%Y").date()
+                except: 
+                    return default
+
+            # Linha de datas: Previsto -> Início -> Fim -> Montagem
             v_prev = c1.date_input("Data Previsto", value=conv_dt(dados_tag.get('PREVISTO', ''), None), format="DD/MM/YYYY")
             v_ini = c2.date_input("Início Prog", value=conv_dt(dados_tag['DATA INIC PROG'], sug_ini), format="DD/MM/YYYY")
             v_fim = c3.date_input("Fim Prog", value=conv_dt(dados_tag['DATA FIM PROG'], sug_fim), format="DD/MM/YYYY")
             v_mont = c4.date_input("Data Montagem", value=conv_dt(dados_tag['DATA MONT'], None), format="DD/MM/YYYY")
+            
+            # Cálculo de status automático
             st_atual = calcular_status_tag(v_ini, v_fim, v_mont)
-            c4.text_input("Status Atual", value=st_atual, disabled=True)
+            st.info(f"Status Atualizado: **{st_atual}**")
+            
             v_obs = st.text_input("Observações:", value=dados_tag['OBS'])
-          
-        if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
-                # 1. Formata todas as datas para salvar no Google Sheets
+            
+            # BOTÃO DE SALVAR (Agora corretamente indentado para dentro do formulário)
+            if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
                 f_prev = v_prev.strftime("%d/%m/%Y") if v_prev else ""
                 f_ini = v_ini.strftime("%d/%m/%Y") if v_ini else ""
                 f_fim = v_fim.strftime("%d/%m/%Y") if v_fim else ""
                 f_mont = v_mont.strftime("%d/%m/%Y") if v_mont else ""
                 
-                # 2. Cria o dicionário ÚNICO de atualização (sem repetições)
                 updates = {
                     'SEMANA OBRA': sem_input, 
                     'PREVISTO': f_prev, 
@@ -169,17 +182,17 @@ if not df_atual.empty:
                     'OBS': v_obs
                 }
                 
-                # 3. Envia para a planilha
                 for col, val in updates.items():
                     if col in cols_map:
                         ws_atual.update_cell(idx_base + 2, cols_map[col], str(val))
                 
-                st.success("Salvo com sucesso!"); st.rerun()
+                st.success("Salvo com sucesso!")
+                st.rerun()
 
-        # --- FORA DO BOTÃO (Para o quadro estar sempre visível abaixo do formulário) ---
+        # --- QUADRO DE DADOS (Fora do formulário para visualização fixa) ---
         st.divider()
         
-        # Configuração de data para o quadro (DD/MM/YYYY)
+        # Configuração única de colunas para evitar repetição
         col_dates_cfg = {
             "PREVISTO": st.column_config.DateColumn(format="DD/MM/YYYY"),
             "DATA INIC PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
@@ -193,17 +206,6 @@ if not df_atual.empty:
             hide_index=True, 
             column_config={**cfg_rel, **col_dates_cfg}
         )
-        
-        # Configuração para forçar formato brasileiro nas colunas de data
-        col_dates_cfg = {
-            "PREVISTO": st.column_config.DateColumn(format="DD/MM/YYYY"),
-            "DATA INIC PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
-            "DATA FIM PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
-            "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY"),
-        }
-        
-        st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], 
-                     use_container_width=True, hide_index=True, column_config={**cfg_rel, **col_dates_cfg})
 
     
     # --- ABA 2: CURVA S ---
