@@ -235,7 +235,7 @@ if not df_atual.empty:
         st.plotly_chart(fig, use_container_width=True)
 
     # --- ABA 3: RELATÓRIOS ---
-   elif aba == "📋 RELATÓRIOS":
+  elif aba == "📋 RELATÓRIOS":
         st.subheader(f"📋 Painel de Relatórios - {disc}")
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total", len(df_atual))
@@ -248,7 +248,6 @@ if not df_atual.empty:
         # --- SEÇÃO: PROGRAMADO PRODUÇÃO ---
         st.markdown("### 📅 PROGRAMADO PRODUÇÃO")
         df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
-        # Adicionei ÁREA aqui também para manter o padrão
         cols_p = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
         st.dataframe(df_p[cols_p], use_container_width=True, hide_index=True, column_config=cfg_rel)
         
@@ -258,17 +257,17 @@ if not df_atual.empty:
 
         st.divider()
         
-        # --- SEÇÃO: LISTA DE PENDÊNCIAS TOTAIS (CORRIGIDA) ---
+        # --- SEÇÃO: LISTA DE PENDÊNCIAS TOTAIS (ORDEM CORRIGIDA) ---
         st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
         df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
         
-        # ORDEM SOLICITADA: ÁREA antes de STATUS e PREVISTO após STATUS
+        # ÁREA antes de STATUS e PREVISTO após STATUS
         cols_pend = ['TAG', 'DESCRIÇÃO', 'ÁREA', 'STATUS', 'PREVISTO', 'OBS']
         
-        # Configuração para a data de previsão aparecer bonita no relatório
-        cfg_rel_pend = {**cfg_rel, "PREVISTO": st.column_config.DateColumn("PREVISÃO", format="DD/MM/YYYY")}
+        # Garante que a coluna de data apareça formatada no quadro
+        cfg_pend_br = {**cfg_rel, "PREVISTO": st.column_config.DateColumn("PREVISÃO", format="DD/MM/YYYY")}
         
-        st.dataframe(df_pend[cols_pend], use_container_width=True, hide_index=True, column_config=cfg_rel_pend)
+        st.dataframe(df_pend[cols_pend], use_container_width=True, hide_index=True, column_config=cfg_pend_br)
         
         buf_pe = BytesIO()
         df_pend[cols_pend].to_excel(buf_pe, index=False)
@@ -276,18 +275,18 @@ if not df_atual.empty:
 
         st.divider()
         
-        # --- SEÇÃO: AVANÇO POR SEMANA ---
+        # --- SEÇÃO: AVANÇO POR SEMANA (REALIZADO) ---
         st.markdown("### 📈 AVANÇO POR SEMANA (REALIZADO)")
         semanas_disponiveis = sorted(df_atual['SEMANA OBRA'].unique(), reverse=True)
         semana_sel = st.selectbox("Selecione a Semana para o Relatório:", semanas_disponiveis)
         
         df_semana = df_atual[(df_atual['SEMANA OBRA'] == semana_sel) & (df_atual['STATUS'] == 'MONTADO')]
-        
         cols_av = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
-        # Configuração para DATA MONT aparecer BR
-        cfg_rel_av = {**cfg_rel, "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY")}
         
-        st.dataframe(df_semana[cols_av], use_container_width=True, hide_index=True, column_config=cfg_rel_av)
+        # Configuração para data brasileira no quadro de avanço
+        cfg_av_br = {**cfg_rel, "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY")}
+        
+        st.dataframe(df_semana[cols_av], use_container_width=True, hide_index=True, column_config=cfg_av_br)
         
         buf_r = BytesIO()
         df_semana[cols_av].to_excel(buf_r, index=False)
