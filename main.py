@@ -213,7 +213,7 @@ if not df_atual.empty:
         c1, c2, c3 = st.columns(3)
         with c1:
             st.info("📄 **MODELO**")
-            mod = df_atual[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']].head(5)
+            mod = df_atual[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS', 'PREVISTO']].head(5)
             b_m = BytesIO(); mod.to_excel(b_m, index=False)
             st.download_button("📥 EXPORTAR MOD PLANILHA", b_m.getvalue(), "modelo_gmont.xlsx", use_container_width=True)
         
@@ -233,7 +233,8 @@ if not df_atual.empty:
                         idx_map = {name: i for i, name in enumerate(headers)}
                         
                         sucesso = 0
-                        colunas_alvo = ['SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']
+                        # ADICIONADO 'PREVISTO' NA LISTA ABAIXO PARA SUBIR OS DADOS
+                        colunas_alvo = ['SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS', 'PREVISTO']
 
                         for _, r in df_up.iterrows():
                             tag_import = str(r.get('TAG', '')).strip()
@@ -247,7 +248,7 @@ if not df_atual.empty:
                                             val_excel = str(r[col_up]).strip().lower()
                                             
                                             # LIMPEZA BRUTA: Se for lixo ou vazio, FORÇA string vazia
-                                            if val_excel in ['', 'nan', 'none', 'nat', '0', '-', '.', 'dd/mm/yyyy', 'none']:
+                                            if val_excel in ['', 'nan', 'none', 'nat', '0', '-', '.', 'dd/mm/yyyy']:
                                                 val_final = ''
                                             else:
                                                 val_final = str(r[col_up]).strip()
@@ -255,13 +256,12 @@ if not df_atual.empty:
                                             lista_mestra[i+1][idx_map[col_up]] = val_final
                                     
                                     sucesso += 1
-                                    log_container.write(f"🧹 TAG {tag_import}: Atualizada/Limpa")
+                                    log_container.write(f"✅ TAG {tag_import}: Atualizada (com Previsto)")
                                     break
 
                         if sucesso > 0:
-                            # Sobrescreve a planilha inteira com os novos dados (limpos)
                             ws_atual.update('A1', lista_mestra)
-                            st.success(f"✅ Sucesso! {sucesso} TAGs processadas. Verifique o Painel.")
+                            st.success(f"✅ Sucesso! {sucesso} TAGs processadas.")
                             st.rerun()
                         else:
                             st.error("❌ TAGs não encontradas.")
