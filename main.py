@@ -132,12 +132,14 @@ if not df_atual.empty:
         "DOCUMENTO": st.column_config.TextColumn(width="medium")
     }
 
-  # --- ABA 1: EDIÇÃO E QUADRO ---
+ # --- ABA 1: EDIÇÃO E QUADRO ---
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"📝 Edição por TAG - {disc}")
+        
+        # --- BLOCO 1: FORMULÁRIO DE EDIÇÃO (EXISTENTE) ---
         c_tag, c_sem = st.columns([2, 1])
         with c_tag:
-            tag_sel = st.selectbox("Selecione o TAG:", sorted(df_atual['TAG'].unique()))
+            tag_sel = st.selectbox("Selecione o TAG para EDITAR:", sorted(df_atual['TAG'].unique()))
         
         idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
         dados_tag = df_atual.iloc[idx_base]
@@ -147,6 +149,7 @@ if not df_atual.empty:
         sug_ini, sug_fim = get_dates_from_week(sem_input)
         
         with st.form("form_edit_final"):
+            st.markdown("##### ✏️ Editar Datas e Status")
             c1, c2, c3, c4 = st.columns(4)
             def conv_dt(val, default):
                 try: return datetime.strptime(str(val), "%d/%m/%Y").date()
@@ -158,10 +161,9 @@ if not df_atual.empty:
             v_mont = c4.date_input("Data Montagem", value=conv_dt(dados_tag['DATA MONT'], None), format="DD/MM/YYYY")
             
             st_atual = calcular_status_tag(v_ini, v_fim, v_mont)
-            st.info(f"Status Atualizado: **{st_atual}**")
             v_obs = st.text_input("Observações:", value=dados_tag['OBS'])
             
-            if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
+            if st.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
                 f_prev = v_prev.strftime("%d/%m/%Y") if v_prev else ""
                 f_ini = v_ini.strftime("%d/%m/%Y") if v_ini else ""
                 f_fim = v_fim.strftime("%d/%m/%Y") if v_fim else ""
@@ -172,30 +174,53 @@ if not df_atual.empty:
                     if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], str(val))
                 st.success("Salvo com sucesso!"); st.rerun()
 
-        # --- GERENCIAMENTO DE TAGS (DENTRO DO QUADRO) ---
+        # --- BLOCO 2: GERENCIAMENTO (CADASTRAR E SELECIONAR PARA EXCLUIR) ---
         st.divider()
-        col_adm1, col_adm2, col_adm3 = st.columns([1, 1, 2])
-        
-        with col_adm1:
-            if st.button("➕ ADICIONAR NOVO TAG", use_container_width=True):
-                # Cria linha com 17 campos respeitando sua base de dados
-                nova_linha = ["NOVO_TAG_" + datetime.now().strftime("%H%M%S"), "", "", "", "", "", "AGUARDANDO PROG", disc, "", "", "", "", "", "", "", "", ""]
-                ws_atual.append_row(nova_linha)
-                st.success("TAG Criado! Selecione na lista acima para editar."); st.rerun()
+        col_adm_add, col_adm_del = st.columns(2)
 
-        with col_adm2:
-            if st.button("🗑️ EXCLUIR TAG SELECIONADO", use_container_width=True):
-                st.error(f"Deseja excluir permanentemente o TAG: {tag_sel}?")
-                if st.checkbox("Sim, eu confirmo a exclusão definitiva"):
-                    try:
-                        celula = ws_atual.find(tag_sel)
-                        ws_atual.delete_rows(celula.row)
-                        st.success("Removido!"); st.rerun()
-                    except:
-                        st.error("Erro ao localizar.")
+        with col_adm_add:
+            with st.expander("➕ CADASTRAR NOVO TAG", expanded=False):
+                with st.form("form_novo_cadastro"):
+                    st.markdown("### Inserir Informações")
+                    n_tag = st.text_input("TAG *")
+                    n_desc = st.text_input("DESCRIÇÃO")
+                    n_area = st.text_input("ÁREA")
+                    n_fam = st.text_input("FAMÍLIA")
+                    n_item = st.text_input("ITEM")
+                    n_qtd = st.text_input("QUANTIDADE")
+                    
+                    st.warning("O novo TAG será inserido com status 'AGUARDANDO PROG'")
+                    confirmar_add = st.checkbox("Confirmo que os dados estão corretos")
+                    
+                    if st.form_submit_button("🚀 CADASTRAR NOVO TAG"):
+                        if n_tag and confirmar_add:
+                            # Ordem das colunas: TAG, SEMANA, INIC, FIM, PREV, MONT, STATUS, DISC, DESC, AREA, DOC, FAM, ITEM, UNID, QTD, OBS, DOC_REF
+                            linha_nova = [n_tag, "", "", "", "", "", "AGUARDANDO PROG", disc, n_desc, n_area, "", n_fam, n_item, "", n_qtd, "", ""]
+                            ws_atual.append_row(linha_nova)
+                            st.success(f"TAG {n_tag} cadastrado!"); st.rerun()
+                        else:
+                            st.error("Preencha o TAG e marque a confirmação.")
+
+        with col_adm_del:
+            with st.expander("🗑️ EXCLUIR UM TAG", expanded=False):
+                # Aqui você seleciona especificamente o que quer apagar
+                tag_excluir = st.selectbox("Selecione o TAG que deseja EXCLUIR:", [""] + sorted(df_atual['TAG'].unique()))
+                if tag_excluir:
+                    st.error(f"🚨 ATENÇÃO: Você vai apagar o TAG {tag_excluir}")
+                    conf_excluir = st.checkbox(f"Eu tenho certeza que desejo excluir o {tag_excluir}")
+                    if st.button("🔴 EXCLUIR AGORA", use_container_width=True):
+                        if conf_excluir:
+                            try:
+                                celula_del = ws_atual.find(tag_excluir)
+                                ws_atual.delete_rows(celula_del.row)
+                                st.success("TAG Removido com sucesso!"); st.rerun()
+                            except:
+                                st.error("Erro ao localizar na planilha.")
+                        else:
+                            st.warning("Marque a confirmação para poder excluir.")
 
         st.divider()
-        # --- TABELA DE VISUALIZAÇÃO ---
+        # --- BLOCO 3: TABELA DE VISUALIZAÇÃO ---
         col_dates_cfg = {
             "PREVISTO": st.column_config.DateColumn(format="DD/MM/YYYY"),
             "DATA INIC PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
