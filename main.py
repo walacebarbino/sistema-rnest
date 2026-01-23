@@ -21,6 +21,13 @@ st.markdown("""
     label p { font-weight: bold !important; font-size: 14px !important; min-height: 25px; margin-bottom: 5px !important; }
     input:disabled { background-color: #1e293b !important; color: #60a5fa !important; opacity: 1 !important; }
     .stFileUploader { margin-top: -15px; }
+    /* Centralizar imagem na sidebar */
+    [data-testid="stSidebar"] [data-testid="stImage"] {
+        text-align: center;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -64,7 +71,6 @@ def extrair_dados(nome_planilha):
         if len(data) > 1:
             df = pd.DataFrame(data[1:], columns=data[0])
             df.columns = df.columns.str.strip()
-            # Garante que as colunas essenciais existam para evitar KeyError
             col_obj = ['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
             for c in col_obj:
                 if c not in df.columns: df[c] = ""
@@ -91,14 +97,15 @@ def calcular_status_tag(d_i, d_f, d_m):
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 
-# --- AJUSTE DA LOGO (CORRIGIDO PARA LOGO2.png MAIÚSCULO CONFORME GITHUB) ---
+# --- AJUSTE DA LOGO (TAMANHO REDUZIDO PARA 60% DA LARGURA) ---
 try:
-    st.sidebar.image("LOGO2.png", use_container_width=True)
+    # Usando width=150 para forçar um tamanho menor, ou use_container_width=False
+    st.sidebar.image("LOGO2.png", width=150)
 except:
     try:
-        st.sidebar.image("logo2.png", use_container_width=True)
+        st.sidebar.image("logo2.png", width=150)
     except:
-        st.sidebar.warning("Arquivo LOGO2.png não encontrado no repositório.")
+        st.sidebar.warning("LOGO2.png não encontrada.")
 
 st.sidebar.subheader("MENU G-MONT")
 disc = st.sidebar.selectbox("DISCIPLINA:", ["ELÉTRICA", "INSTRUMENTAÇÃO"])
@@ -187,7 +194,6 @@ if not df_atual.empty:
         df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
         if sem_f != "TODAS": df_p = df_p[df_p['SEMANA OBRA'] == sem_f]
         
-        # Proteção contra KeyError: Só exibe colunas que existem
         cols_producao = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
         cols_existentes = [c for c in cols_producao if c in df_p.columns]
         st.dataframe(df_p[cols_existentes], use_container_width=True, hide_index=True)
