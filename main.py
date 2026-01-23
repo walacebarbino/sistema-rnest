@@ -235,7 +235,7 @@ if not df_atual.empty:
         st.plotly_chart(fig, use_container_width=True)
 
     # --- ABA 3: RELATÓRIOS ---
-  # --- ABA 3: RELATÓRIOS ---
+      # --- ABA 3: RELATÓRIOS ---
     elif aba == "📋 RELATÓRIOS":
         st.subheader(f"📋 Painel de Relatórios - {disc}")
         m1, m2, m3, m4 = st.columns(4)
@@ -254,14 +254,14 @@ if not df_atual.empty:
         st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
         df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
         
-        # --- AQUI ESTÁ A MUDANÇA QUE VOCÊ PEDIU ---
-        # ÁREA antes de STATUS e PREVISTO (PREVISÃO) depois de STATUS
+        # --- ORDEM CORRIGIDA: ÁREA antes de STATUS e PREVISTO depois de STATUS ---
         cols_pend = ['TAG', 'DESCRIÇÃO', 'ÁREA', 'STATUS', 'PREVISTO', 'OBS']
         
-        # Adicionamos a configuração para a data da previsão aparecer como "PREVISÃO" e no formato brasileiro
-        cfg_pend_br = {**cfg_rel, "PREVISTO": st.column_config.DateColumn("PREVISÃO", format="DD/MM/YYYY")}
+        # Ajustado para exibir "PREVISTO" no cabeçalho com formato brasileiro
+        cfg_pend_br = {**cfg_rel, "PREVISTO": st.column_config.DateColumn("PREVISTO", format="DD/MM/YYYY")}
         
         st.dataframe(df_pend[cols_pend], use_container_width=True, hide_index=True, column_config=cfg_pend_br)
+        
         buf_pe = BytesIO(); df_pend[cols_pend].to_excel(buf_pe, index=False)
         st.download_button("📥 EXPORTAR PENDÊNCIAS", buf_pe.getvalue(), f"Pendencias_{disc}.xlsx")
 
@@ -273,10 +273,10 @@ if not df_atual.empty:
         df_semana = df_atual[(df_atual['SEMANA OBRA'] == semana_sel) & (df_atual['STATUS'] == 'MONTADO')]
         cols_av = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
         
-        # Mantive o padrão de data brasileira aqui também
         cfg_av_br = {**cfg_rel, "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY")}
         
         st.dataframe(df_semana[cols_av], use_container_width=True, hide_index=True, column_config=cfg_av_br)
+        
         buf_r = BytesIO(); df_semana[cols_av].to_excel(buf_r, index=False)
         st.download_button(f"📥 EXPORTAR SEMANA {semana_sel}", buf_r.getvalue(), f"Avanco_Semana_{semana_sel}_{disc}.xlsx")
 
