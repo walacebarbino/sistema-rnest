@@ -29,12 +29,16 @@ st.markdown("""
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 
 def tela_login():
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         st.markdown("<br><br>", unsafe_allow_html=True)
+        try:
+            st.image("LOGO2.png", width=200) # Exibe a logo centralizada
+        except:
+            pass
         st.subheader("🔐 ACESSO RESTRITO G-MONT")
         pin = st.text_input("Digite o PIN:", type="password", max_chars=4)
-        if st.button("ENTRAR NO SISTEMA"):
+        if st.button("ENTRAR NO SISTEMA", use_container_width=True):
             if pin == "1234":
                 st.session_state['logado'] = True
                 st.rerun()
