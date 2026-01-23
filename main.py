@@ -234,50 +234,54 @@ if not df_atual.empty:
         buf_r = BytesIO(); df_setec[cols_av].to_excel(buf_r, index=False)
         st.download_button("📥 EXPORTAR AVANÇO SEMANAL", buf_r.getvalue(), f"Realizado_7_dias_{disc}.xlsx")
 
-    # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES (CORREÇÃO DE COTA E PERFORMANCE) ---
+   # --- ABA 4: IMPORTAÇÃO (VERSÃO FINAL BLINDADA) ---
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
-        st.subheader(f"📤 Exportações e Importações - {disc}")
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.info("📄 **MODELO**")
-            mod = df_atual[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS']].head(5)
-            b_m = BytesIO(); mod.to_excel(b_m, index=False)
-            st.download_button("📥 EXPORTAR MOD PLANILHA", b_m.getvalue(), "modelo_gmont.xlsx", use_container_width=True)
-        
-        with c2:
-            st.info("🚀 **IMPORTAÇÃO RÁPIDA**")
-            up = st.file_uploader("Upload Excel:", type="xlsx", label_visibility="collapsed")
-            if up:
-                if st.button("🚀 SINCRONIZAR TUDO", use_container_width=True):
-                    try:
-                        with st.spinner('Processando dados e enviando ao Google...'):
-                            df_up = pd.read_excel(up).astype(str).replace('nan', '')
-                            df_up.columns = df_up.columns.str.strip().str.upper()
+        st.subheader("🚀 Sincronização em Massa (Intervalo DADOS)")
+        up = st.file_uploader("Subir Excel", type="xlsx")
+        if up:
+            if st.button("🚀 SINCRONIZAR AGORA"):
+                try:
+                    with st.spinner('Limpando e enviando...'):
+                        # Lê o Excel e já limpa os NaNs na entrada
+                        df_up = pd.read_excel(up, engine='openpyxl').fillna('')
+                        df_up.columns = df_up.columns.str.strip().upper()
+                        
+                        # PUXA APENAS O INTERVALO NOMEADO 'DADOS'
+                        try:
+                            data_mat = ws_atual.get('DADOS')
+                        except:
+                            data_mat = ws_atual.get_all_values()
                             
-                            # Carrega matriz completa para evitar erro de cota 429
-                            data_matrix = ws_atual.get_all_values()
-                            sucesso = 0
+                        sucesso = 0
+                        # Processa a matriz na memória
+                        for _, r in df_up.iterrows():
+                            tag_ex = str(r.get('TAG', '')).strip()
+                            if not tag_ex: continue
                             
-                            for _, r_up in df_up.iterrows():
-                                tag_ex = str(r_up.get('TAG', '')).strip()
-                                for i, row_ws in enumerate(data_matrix[1:]):
-                                    if str(row_ws[0]).strip() == tag_ex:
-                                        # Atualiza colunas na matriz (Semana=B, Inic=C, Fim=D, Mont=E, Obs=G)
-                                        # Usamos buscas flexíveis para os nomes das colunas do Excel
-                                        for col_ref, idx_ws in [('SEMANA', 1), ('INIC', 2), ('FIM', 3), ('MONT', 4), ('OBS', 6)]:
-                                            for c_ex in df_up.columns:
-                                                if col_ref in c_ex:
-                                                    data_matrix[i+1][idx_ws] = r_up[c_ex]
-                                                    break
-                                        sucesso += 1
-                            
-                            ws_atual.update('A1', data_matrix)
-                            st.balloons()
-                            st.success(f"✅ SUCESSO! {sucesso} TAGs sincronizadas com o Google Sheets.")
-                            time.sleep(2)
-                            st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro na sincronização: {e}")
+                            for i, row in enumerate(data_mat[1:]):
+                                if str(row[0]).strip() == tag_ex:
+                                    # Mapeamento forçando STRING para evitar erro de float/nan
+                                    # Ajuste os índices [1, 2, 3...] conforme sua planilha
+                                    if 'SEMANA' in str(df_up.columns): data_mat[i+1][1] = str(r.get('SEMANA OBRA', row[1]))
+                                    if 'INIC' in str(df_up.columns):   data_mat[i+1][2] = str(r.get('DATA INIC PROG', row[2]))
+                                    if 'FIM' in str(df_up.columns):    data_mat[i+1][3] = str(r.get('DATA FIM PROG', row[3]))
+                                    if 'MONT' in str(df_up.columns):   data_mat[i+1][4] = str(r.get('DATA MONT', row[4]))
+                                    if 'OBS' in str(df_up.columns):    data_mat[i+1][6] = str(r.get('OBS', row[6]))
+                                    sucesso += 1
+
+                        # AQUI ESTÁ O PULO DO GATO:
+                        # Converte a matriz inteira para string e remove qualquer 'nan' residual
+                        final_mat = [[str(c) if (str(c).lower() != 'nan' and c is not None) else '' for c in lista] for lista in data_mat]
+                        
+                        # Se você usar o intervalo nomeado, ele grava EXATAMENTE onde deve
+                        ws_atual.update('DADOS', final_mat) 
+                        
+                        st.balloons()
+                        st.success(f"✅ Sincronizado! {sucesso} TAGs atualizadas no intervalo DADOS.")
+                        time.sleep(2)
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Erro Crítico: {e}")
         
         with c3:
             st.info("💾 **BASE COMPLETA**")
