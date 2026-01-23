@@ -316,7 +316,7 @@ if not df_atual.empty:
         buf_r = BytesIO(); df_semana[cols_av].to_excel(buf_r, index=False)
         st.download_button(f"📥 EXPORTAR SEMANA {semana_sel}", buf_r.getvalue(), f"Avanco_Semana_{semana_sel}_{disc}.xlsx")
 
-    # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
+   # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
         st.subheader(f"📤 Exportações e Importações - {disc}")
         c1, c2, c3 = st.columns(3)
