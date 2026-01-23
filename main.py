@@ -144,6 +144,7 @@ if not df_atual.empty:
                 except: return default
             v_ini = c1.date_input("Início Prog", value=conv_dt(dados_tag['DATA INIC PROG'], sug_ini), format="DD/MM/YYYY")
             v_fim = c2.date_input("Fim Prog", value=conv_dt(dados_tag['DATA FIM PROG'], sug_fim), format="DD/MM/YYYY")
+            v_prev = c1.date_input("Data Previsto", value=conv_dt(dados_tag['PREVISTO'], None), format="DD/MM/YYYY")
             v_mont = c3.date_input("Data Montagem", value=conv_dt(dados_tag['DATA MONT'], None), format="DD/MM/YYYY")
             st_atual = calcular_status_tag(v_ini, v_fim, v_mont)
             c4.text_input("Status Atual", value=st_atual, disabled=True)
@@ -151,14 +152,27 @@ if not df_atual.empty:
             if st.form_submit_button("💾 SALVAR ALTERAÇÕES"):
                 f_ini = v_ini.strftime("%d/%m/%Y") if v_ini else ""
                 f_fim = v_fim.strftime("%d/%m/%Y") if v_fim else ""
+                f_prev = v_prev.strftime("%d/%m/%Y") if v_prev else ""
+                updates = {'SEMANA OBRA': sem_input, 'PREVISTO': f_prev, 'DATA INIC PROG': f_ini, 'DATA FIM PROG': f_fim, 'DATA MONT': f_mont, 'STATUS': st_atual, 'OBS': v_obs}
                 f_mont = v_mont.strftime("%d/%m/%Y") if v_mont else ""
                 updates = {'SEMANA OBRA': sem_input, 'DATA INIC PROG': f_ini, 'DATA FIM PROG': f_fim, 'DATA MONT': f_mont, 'STATUS': st_atual, 'OBS': v_obs}
                 for col, val in updates.items():
                     if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], str(val))
                 st.success("Salvo!"); st.rerun()
         st.divider()
+        
+        # Configuração para forçar formato brasileiro nas colunas de data
+        col_dates_cfg = {
+            "PREVISTO": st.column_config.DateColumn(format="DD/MM/YYYY"),
+            "DATA INIC PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
+            "DATA FIM PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
+            "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY"),
+        }
+        
         st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], 
-             use_container_width=True, hide_index=True, column_config=cfg_rel)
+                     use_container_width=True, hide_index=True, column_config={**cfg_rel, **col_dates_cfg})
+
+    
     # --- ABA 2: CURVA S ---
     elif aba == "📊 CURVA S":
         st.subheader(f"📊 Curva S e Avanço - {disc}")
