@@ -16,10 +16,10 @@ DATA_INICIO_OBRA = datetime(2025, 9, 29)
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'disciplina_ativa' not in st.session_state: st.session_state['disciplina_ativa'] = None
 
-# --- CSS PARA PADRONIZAÇÃO E LOGO NA SIDEBAR ---
+# --- CSS PARA LOGO NA SIDEBAR E PADRONIZAÇÃO ---
 st.markdown("""
     <style>
-    /* Ajuste da Logo para preencher a sidebar (Caixa Amarela) */
+    /* Ajuste para a logo ocupar a sidebar (Caixa Amarela da sua foto) */
     [data-testid="stSidebar"] [data-testid="stImage"] {
         padding: 0px !important;
         margin-top: -60px !important;
@@ -32,17 +32,17 @@ st.markdown("""
         height: auto !important;
         border-radius: 0px !important;
     }
-    /* Estilo para botões de seleção de disciplina */
-    .stButton > button { font-weight: bold; }
+    /* Estilo para botões de seleção centralizados */
+    .stButton > button { font-weight: bold !important; }
     
-    /* Padronização de inputs */
+    /* Padronização de inputs e fontes */
     [data-testid="column"] { padding-left: 5px !important; padding-right: 5px !important; }
     .stDateInput div, .stTextInput div, .stNumberInput div, .stSelectbox div { height: 45px !important; }
     label p { font-weight: bold !important; font-size: 14px !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNÇÕES DE INTERFACE INICIAL ---
+# --- TELAS DE ENTRADA ---
 def tela_login():
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
@@ -59,22 +59,26 @@ def tela_login():
     st.stop()
 
 def tela_selecao_disciplina():
-    st.markdown("<h1 style='text-align: center; color: #f1c40f;'>SISTEMA G-MONT</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center;'>SISTEMA G-MONT</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center;'>Selecione a Disciplina de Trabalho:</h3>", unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
-    c1, c2, c3 = st.columns(3)
-    if c1.button("⚡ ELÉTRICA", use_container_width=True, height=150):
+    
+    col1, col2, col3 = st.columns(3)
+    # Removido o parâmetro 'height' que causava erro na foto 11
+    if col1.button("⚡ ELÉTRICA", use_container_width=True):
         st.session_state['disciplina_ativa'] = "ELÉTRICA"
         st.rerun()
-    if c2.button("🔧 INSTRUMENTAÇÃO", use_container_width=True, height=150):
+    
+    if col2.button("🔧 INSTRUMENTAÇÃO", use_container_width=True):
         st.session_state['disciplina_ativa'] = "INSTRUMENTAÇÃO"
         st.rerun()
-    if c3.button("🏗️ ESTRUTURA", use_container_width=True, height=150):
+        
+    if col3.button("🏗️ ESTRUTURA", use_container_width=True):
         st.session_state['disciplina_ativa'] = "ESTRUTURA"
         st.rerun()
     st.stop()
 
-# --- LOGICA DE ACESSO ---
+# --- VERIFICAÇÃO DE LOGIN E DISCIPLINAS ---
 if not st.session_state['logado']: tela_login()
 if not st.session_state['disciplina_ativa']: tela_selecao_disciplina()
 
@@ -109,6 +113,7 @@ def extrair_dados(nome_planilha):
         return pd.DataFrame(), None
     except: return pd.DataFrame(), None
 
+# --- LÓGICA DE APOIO ---
 def get_dates_from_week(week_number):
     if not str(week_number).isdigit(): return None, None
     monday = DATA_INICIO_OBRA + timedelta(weeks=(int(week_number) - 1))
@@ -121,12 +126,12 @@ def calcular_status_tag(d_i, d_f, d_m):
     if tem(d_i) or tem(d_f): return "PROGRAMADO"
     return "AGUARDANDO PROG"
 
-# --- CARREGAMENTO DOS DADOS ---
+# --- CARREGAMENTO DAS DISCIPLINAS ---
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 df_est, ws_est = extrair_dados("BD_ESTR")
 
-# --- DEFINIÇÃO DA DISCIPLINA ATUAL ---
+# --- SELEÇÃO DE DADOS ---
 disc = st.session_state['disciplina_ativa']
 if disc == "ELÉTRICA": df_atual, ws_atual = df_ele, ws_ele
 elif disc == "INSTRUMENTAÇÃO": df_atual, ws_atual = df_ins, ws_ins
@@ -136,21 +141,21 @@ else: df_atual, ws_atual = pd.DataFrame(), None
 # --- SIDEBAR ---
 with st.sidebar:
     try: st.image("LOGO2.png", use_container_width=True)
-    except: st.markdown("### G-MONT")
+    except: st.sidebar.markdown("### G-MONT")
     
     st.subheader(f"📍 {disc}")
     if st.button("🔄 TROCAR DISCIPLINA", use_container_width=True):
         st.session_state['disciplina_ativa'] = None
         st.rerun()
     
-    aba = st.sidebar.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 EXPORTAÇÃO E IMPORTAÇÕES"])
-    st.sidebar.divider()
-    if st.sidebar.button("🚪 SAIR", use_container_width=True):
+    aba = st.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 EXPORTAÇÃO E IMPORTAÇÕES"])
+    st.divider()
+    if st.button("🚪 SAIR DO SISTEMA", use_container_width=True):
         st.session_state['logado'] = False
         st.session_state['disciplina_ativa'] = None
         st.rerun()
 
-# --- PROCESSAMENTO DO DATAFRAME ---
+# --- CONTEÚDO PRINCIPAL ---
 if not df_atual.empty:
     df_atual['STATUS'] = df_atual.apply(lambda r: calcular_status_tag(r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT','')), axis=1)
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
@@ -175,13 +180,16 @@ if not df_atual.empty:
             def conv_dt(val, default):
                 try: return datetime.strptime(str(val), "%d/%m/%Y").date()
                 except: return default
+
             v_prev = c1.date_input("Data Previsto", value=conv_dt(dados_tag.get('PREVISTO', ''), None), format="DD/MM/YYYY")
             v_ini = c2.date_input("Início Prog", value=conv_dt(dados_tag['DATA INIC PROG'], sug_ini), format="DD/MM/YYYY")
             v_fim = c3.date_input("Fim Prog", value=conv_dt(dados_tag['DATA FIM PROG'], sug_fim), format="DD/MM/YYYY")
             v_mont = c4.date_input("Data Montagem", value=conv_dt(dados_tag['DATA MONT'], None), format="DD/MM/YYYY")
+            
             st_atual = calcular_status_tag(v_ini, v_fim, v_mont)
             st.info(f"Status Atualizado: **{st_atual}**")
             v_obs = st.text_input("Observações:", value=dados_tag['OBS'])
+            
             if st.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
                 f_prev, f_ini, f_fim, f_mont = [v.strftime("%d/%m/%Y") if v else "" for v in [v_prev, v_ini, v_fim, v_mont]]
                 updates = {'SEMANA OBRA': sem_input, 'PREVISTO': f_prev, 'DATA INIC PROG': f_ini, 'DATA FIM PROG': f_fim, 'DATA MONT': f_mont, 'STATUS': st_atual, 'OBS': v_obs}
@@ -200,24 +208,24 @@ if not df_atual.empty:
                     ca3, ca4, ca5 = st.columns(3)
                     n_fam, n_uni, n_area = ca3.text_input("FAMÍLIA"), ca4.text_input("UNIDADE"), ca5.text_input("ÁREA")
                     n_des = st.text_input("DESENHO (DOC)")
-                    if st.form_submit_button("🚀 CADASTRAR"):
+                    if st.form_submit_button("🚀 CADASTRAR NO BANCO"):
                         if n_tag:
-                            linha = [n_tag, "", "", "", "", "", "AGUARDANDO PROG", n_disc, n_desc, n_area, n_des, n_fam, "", n_uni, "", "", ""]
-                            ws_atual.append_row(linha)
-                            st.success("Cadastrado!"); st.rerun()
+                            nova_linha = [n_tag, "", "", "", "", "", "AGUARDANDO PROG", n_disc, n_desc, n_area, n_des, n_fam, "", n_uni, "", "", ""]
+                            ws_atual.append_row(nova_linha)
+                            st.success(f"TAG {n_tag} cadastrado!"); st.rerun()
 
         with col_del:
-            with st.expander("🗑️ DELETAR TAG"):
-                tag_para_deletar = st.selectbox("TAG para DELETAR:", [""] + sorted(df_atual['TAG'].unique().tolist()))
+            with st.expander("🗑️ DELETAR TAG DO BANCO"):
+                tag_para_deletar = st.selectbox("Selecione a TAG para DELETAR:", [""] + sorted(df_atual['TAG'].unique().tolist()))
                 if tag_para_deletar:
-                    st.warning(f"Excluir {tag_para_deletar}?")
-                    confirm_del = st.checkbox("Confirmo a exclusão")
-                    c_b1, c_b2 = st.columns(2)
-                    if c_b1.button("🔴 CONFIRMAR", use_container_width=True):
+                    st.warning(f"🚨 Excluir permanentemente: {tag_para_deletar}?")
+                    confirm_del = st.checkbox("Eu confirmo a exclusão")
+                    c_btn_del, c_btn_can = st.columns(2)
+                    if c_btn_del.button("🔴 CONFIRMAR EXCLUSÃO", use_container_width=True):
                         if confirm_del:
                             cell = ws_atual.find(tag_para_deletar, in_column=1)
-                            if cell: ws_atual.delete_rows(cell.row); st.success("Deletado!"); st.rerun()
-                    if c_b2.button("⚪ CANCELAR", use_container_width=True): st.rerun()
+                            if cell: ws_atual.delete_rows(cell.row); st.success("Removido!"); st.rerun()
+                    if c_btn_can.button("⚪ CANCELAR", use_container_width=True): st.rerun()
 
         st.divider()
         col_dates_cfg = {"TAG": st.column_config.TextColumn("TAG"), "PREVISTO": st.column_config.DateColumn(format="DD/MM/YYYY"), "DATA INIC PROG": st.column_config.DateColumn(format="DD/MM/YYYY"), "DATA FIM PROG": st.column_config.DateColumn(format="DD/MM/YYYY"), "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY")}
@@ -254,13 +262,13 @@ if not df_atual.empty:
         m1.metric("Total", len(df_atual)); m2.metric("Montados ✅", len(df_atual[df_atual['STATUS']=='MONTADO']))
         m3.metric("Programados 📅", len(df_atual[df_atual['STATUS']=='PROGRAMADO'])); m4.metric("Aguardando ⏳", len(df_atual[df_atual['STATUS']=='AGUARDANDO PROG']))
         st.divider()
-        st.markdown("### 📅 PROGRAMADO PRODUÇÃO")
         df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
+        st.markdown("### 📅 PROGRAMADO PRODUÇÃO")
         st.dataframe(df_p[['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']], use_container_width=True, hide_index=True, column_config=cfg_rel)
         buf_p = BytesIO(); df_p.to_excel(buf_p, index=False)
         st.download_button("📥 EXPORTAR PROGRAMADO", buf_p.getvalue(), f"Programado_{disc}.xlsx")
 
-    # --- ABA 4: IMPORTAÇÕES (IGUAL AO SEU) ---
+    # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
         st.subheader(f"📤 Exportações e Importações - {disc}")
         c1, c2, c3 = st.columns(3)
@@ -268,14 +276,30 @@ if not df_atual.empty:
             st.info("📄 MODELO")
             mod = df_atual[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS', 'PREVISTO']].head(5)
             b_m = BytesIO(); mod.to_excel(b_m, index=False)
-            st.download_button("📥 EXPORTAR MODELO", b_m.getvalue(), "modelo.xlsx")
+            st.download_button("📥 EXPORTAR MOD", b_m.getvalue(), "modelo_gmont.xlsx")
         with c2:
             st.info("🚀 IMPORTAÇÃO")
             up = st.file_uploader("Upload Excel:", type="xlsx")
-            if up and st.button("🚀 PROCESSAR IMPORTAÇÃO"):
-                df_up = pd.read_excel(up).astype(str)
-                # ... (lógica de importação que você já tem no seu código original)
-                st.success("Importado com sucesso (exemplo)!"); st.rerun()
+            if up and st.button("🚀 IMPORTAR"):
+                try:
+                    df_up = pd.read_excel(up).astype(str)
+                    lista_mestra = ws_atual.get_all_values()
+                    headers = [str(h).strip().upper() for h in lista_mestra[0]]
+                    idx_map = {name: i for i, name in enumerate(headers)}
+                    sucesso = 0
+                    for _, r in df_up.iterrows():
+                        tag_import = str(r.get('TAG', '')).strip()
+                        for i, row in enumerate(lista_mestra[1:]):
+                            if str(row[0]).strip() == tag_import:
+                                for col in ['SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS', 'PREVISTO']:
+                                    if col.upper() in [c.upper() for c in df_up.columns]:
+                                        val = str(r[col]).strip()
+                                        lista_mestra[i+1][idx_map[col.upper()]] = val
+                                sucesso += 1; break
+                    if sucesso > 0:
+                        ws_atual.update('A1', lista_mestra)
+                        st.success(f"{sucesso} atualizados!"); st.rerun()
+                except Exception as e: st.error(f"Erro: {e}")
         with c3:
             st.info("💾 BASE COMPLETA")
             b_f = BytesIO(); df_atual.to_excel(b_f, index=False)
