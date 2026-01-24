@@ -123,7 +123,7 @@ df_est, ws_est = extrair_dados("BD_ESTR")
 
 # --- SIDEBAR ---
 try:
-    st.sidebar.image("LOGO2.png", width=120)
+    st.sidebar.image("LOGO2.png", width=150)
 except:
     st.sidebar.markdown("### G-MONT")
 
