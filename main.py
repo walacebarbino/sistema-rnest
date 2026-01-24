@@ -16,7 +16,7 @@ DATA_INICIO_OBRA = datetime(2025, 9, 29)
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'disciplina_ativa' not in st.session_state: st.session_state['disciplina_ativa'] = None
 
-# --- CSS PARA LOGO "SANGRE" NA SIDEBAR ---
+# --- CSS PARA LOGO NA SIDEBAR ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] [data-testid="stImage"] {
@@ -37,6 +37,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# --- TELAS DE ENTRADA (ALTERAÇÃO SOLICITADA) ---
 def tela_login():
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
@@ -71,7 +72,7 @@ def tela_selecao_disciplina():
 if not st.session_state['logado']: tela_login()
 if not st.session_state['disciplina_ativa']: tela_selecao_disciplina()
 
-# --- CONEXÃO GOOGLE SHEETS ---
+# --- CONEXÃO GOOGLE SHEETS (SEU ORIGINAL) ---
 @st.cache_resource
 def conectar_google():
     try:
@@ -114,31 +115,32 @@ def calcular_status_tag(d_i, d_f, d_m):
     if tem(d_i) or tem(d_f): return "PROGRAMADO"
     return "AGUARDANDO PROG"
 
+# --- CARREGAMENTO E SIDEBAR ---
 df_ele, ws_ele = extrair_dados("BD_ELE")
 df_ins, ws_ins = extrair_dados("BD_INST")
 df_est, ws_est = extrair_dados("BD_ESTR")
 
-with st.sidebar:
-    try: st.image("LOGO2.png", use_container_width=True)
-    except: pass
-    disc = st.session_state['disciplina_ativa']
-    st.sidebar.subheader("MENU G-MONT")
-    st.sidebar.write(f"**Disciplina:** {disc}")
-    if st.sidebar.button("🔄 TROCAR DISCIPLINA"):
-        st.session_state['disciplina_ativa'] = None
-        st.rerun()
-    aba = st.sidebar.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 EXPORTAÇÃO E IMPORTAÇÕES"])
-    st.sidebar.divider()
-    if st.sidebar.button("🚪 SAIR", use_container_width=True):
-        st.session_state['logado'] = False
-        st.session_state['disciplina_ativa'] = None
-        st.rerun()
-
+disc = st.session_state['disciplina_ativa']
 if disc == "ELÉTRICA": df_atual, ws_atual = df_ele, ws_ele
 elif disc == "INSTRUMENTAÇÃO": df_atual, ws_atual = df_ins, ws_ins
 elif disc == "ESTRUTURA": df_atual, ws_atual = df_est, ws_est
 else: df_atual, ws_atual = pd.DataFrame(), None
 
+with st.sidebar:
+    try: st.image("LOGO2.png", use_container_width=True)
+    except: pass
+    st.subheader(f"📍 {disc}")
+    if st.button("🔄 TROCAR DISCIPLINA", use_container_width=True):
+        st.session_state['disciplina_ativa'] = None
+        st.rerun()
+    aba = st.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 EXPORTAÇÃO E IMPORTAÇÕES"])
+    st.divider()
+    if st.button("🚪 SAIR", use_container_width=True):
+        st.session_state['logado'] = False
+        st.session_state['disciplina_ativa'] = None
+        st.rerun()
+
+# --- LÓGICA DAS ABAS (SEU ORIGINAL) ---
 if not df_atual.empty:
     df_atual['STATUS'] = df_atual.apply(lambda r: calcular_status_tag(r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT','')), axis=1)
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
@@ -173,7 +175,7 @@ if not df_atual.empty:
         col_cad, col_del = st.columns(2)
         with col_cad:
             with st.expander("➕ CADASTRAR NOVO TAG"):
-                with st.form("form_novo_tag"):
+                with st.form("form_novo"):
                     n_tag = st.text_input("TAG *")
                     if st.form_submit_button("🚀 CADASTRAR"):
                         if n_tag: ws_atual.append_row([n_tag, "", "", "", "", "", "AGUARDANDO PROG", disc, "", "", "", "", "", "", "", "", ""]); st.rerun()
@@ -184,7 +186,7 @@ if not df_atual.empty:
                     cell = ws_atual.find(tag_para_deletar, in_column=1)
                     if cell: ws_atual.delete_rows(cell.row); st.rerun()
         st.divider()
-        # --- QUADRO ATUALIZADO COM DESCRIÇÃO ANTES DO STATUS ---
+        # --- QUADRO COM DESCRIÇÃO ANTES DO STATUS (ALTERAÇÃO SOLICITADA) ---
         colunas_quadro = ['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'DESCRIÇÃO', 'STATUS', 'OBS']
         col_dates_cfg = {
             "TAG": st.column_config.TextColumn("TAG"),
@@ -192,11 +194,12 @@ if not df_atual.empty:
             "DATA INIC PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
             "DATA FIM PROG": st.column_config.DateColumn(format="DD/MM/YYYY"),
             "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY"),
-            "DESCRIÇÃO": st.column_config.TextColumn("DESCRIÇÃO", width="large"),
+            "DESCRIÇÃO": st.column_config.TextColumn("DESCRIÇÃO", width="large")
         }
         st.dataframe(df_atual[colunas_quadro], use_container_width=True, hide_index=True, column_config={**cfg_rel, **col_dates_cfg})
 
     elif aba == "📊 CURVA S":
+        # (SEU CÓDIGO ORIGINAL DE CURVA S)
         st.subheader(f"📊 Curva S - {disc}")
         total_t = len(df_atual)
         montados = len(df_atual[df_atual['STATUS'] == 'MONTADO'])
@@ -219,6 +222,7 @@ if not df_atual.empty:
         fig.update_layout(template="plotly_dark", barmode='group', height=500); st.plotly_chart(fig, use_container_width=True)
 
     elif aba == "📋 RELATÓRIOS":
+        # (SEU CÓDIGO ORIGINAL DE RELATÓRIOS)
         st.subheader(f"📋 Relatórios - {disc}")
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total", len(df_atual)); m2.metric("Montados ✅", len(df_atual[df_atual['STATUS']=='MONTADO']))
@@ -245,6 +249,7 @@ if not df_atual.empty:
         st.dataframe(df_semana[['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']], use_container_width=True, hide_index=True)
 
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
+        # (SEU CÓDIGO ORIGINAL DE IMPORTAÇÃO/EXPORTAÇÃO)
         st.subheader(f"📤 Exportações e Importações - {disc}")
         c1, c2, c3 = st.columns(3)
         with c1:
