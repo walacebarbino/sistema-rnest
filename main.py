@@ -68,11 +68,14 @@ def tela_selecao_disciplina():
     st.markdown("<h3 style='text-align: center;'>Escolha a Disciplina para iniciar:</h3>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns(3)
     if col1.button("⚡ ELÉTRICA", use_container_width=True):
-        st.session_state['disciplina_ativa'] = "ELÉTRICA"; st.rerun()
+        st.session_state['disciplina_ativa'] = "ELÉTRICA"
+        st.rerun()
     if col2.button("🔧 INSTRUMENTAÇÃO", use_container_width=True):
-        st.session_state['disciplina_ativa'] = "INSTRUMENTAÇÃO"; st.rerun()
+        st.session_state['disciplina_ativa'] = "INSTRUMENTAÇÃO"
+        st.rerun()
     if col3.button("🏗️ ESTRUTURA", use_container_width=True):
-        st.session_state['disciplina_ativa'] = "ESTRUTURA"; st.rerun()
+        st.session_state['disciplina_ativa'] = "ESTRUTURA"
+        st.rerun()
     st.stop()
 
 if not st.session_state['logado']: tela_login()
@@ -132,7 +135,8 @@ else: df_atual, ws_atual = df_est, ws_est
 st.sidebar.subheader("MENU G-MONT")
 st.sidebar.write(f"**Disciplina:** {disc}")
 if st.sidebar.button("🔄 TROCAR DISCIPLINA"):
-    st.session_state['disciplina_ativa'] = None; st.rerun()
+    st.session_state['disciplina_ativa'] = None
+    st.rerun()
 
 aba = st.sidebar.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 EXPORTAÇÃO E IMPORTAÇÕES"])
 
@@ -149,6 +153,7 @@ if not df_atual.empty:
         dados_tag = df_atual.iloc[idx_base]
         with c_sem:
             sem_input = st.text_input("Semana da Obra:", value=dados_tag['SEMANA OBRA'])
+        
         sug_ini, sug_fim = get_dates_from_week(sem_input)
         
         with st.form("form_edit_final"):
@@ -156,7 +161,7 @@ if not df_atual.empty:
             def conv_dt(val, default):
                 try: return datetime.strptime(str(val), "%d/%m/%Y").date()
                 except: return default
-            v_prev = c1.date_input("Data Previsto", value=conv_dt(dados_tag.get('PREVISTO',''), None), format="DD/MM/YYYY")
+            v_prev = c1.date_input("Data Previsto", value=conv_dt(dados_tag.get('PREVISTO', ''), None), format="DD/MM/YYYY")
             v_ini = c2.date_input("Início Prog", value=conv_dt(dados_tag['DATA INIC PROG'], sug_ini), format="DD/MM/YYYY")
             v_fim = c3.date_input("Fim Prog", value=conv_dt(dados_tag['DATA FIM PROG'], sug_fim), format="DD/MM/YYYY")
             v_mont = c4.date_input("Data Montagem", value=conv_dt(dados_tag['DATA MONT'], None), format="DD/MM/YYYY")
@@ -164,13 +169,15 @@ if not df_atual.empty:
             v_obs = st.text_input("Observações:", value=dados_tag['OBS'])
             if st.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
                 f_prev = v_prev.strftime("%d/%m/%Y") if v_prev else ""
-                f_ini, f_fim = v_ini.strftime("%d/%m/%Y"), v_fim.strftime("%d/%m/%Y")
+                f_ini = v_ini.strftime("%d/%m/%Y") if v_ini else ""
+                f_fim = v_fim.strftime("%d/%m/%Y") if v_fim else ""
                 f_mont = v_mont.strftime("%d/%m/%Y") if v_mont else ""
                 st_at = calcular_status_tag(f_ini, f_fim, f_mont)
                 updates = {'SEMANA OBRA': sem_input, 'PREVISTO': f_prev, 'DATA INIC PROG': f_ini, 'DATA FIM PROG': f_fim, 'DATA MONT': f_mont, 'STATUS': st_at, 'OBS': v_obs}
                 for col, val in updates.items():
                     if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], str(val))
-                st.success("✅ Alterações salvas!"); st.cache_resource.clear(); st.rerun()
+                st.cache_resource.clear()
+                st.rerun()
 
         st.divider()
         col_cad, col_del = st.columns(2)
@@ -180,30 +187,32 @@ if not df_atual.empty:
                     n_tag = st.text_input("TAG *")
                     n_desc = st.text_input("Descrição")
                     c_n1, c_n2 = st.columns(2)
-                    n_area, n_doc = c_n1.text_input("Área"), c_n2.text_input("Documento")
-                    n_fam, n_uni = c_n1.text_input("Família"), c_n2.text_input("Unidade")
+                    n_area = c_n1.text_input("Área")
+                    n_doc = c_n2.text_input("Documento")
+                    n_fam = c_n1.text_input("Família")
+                    n_uni = c_n2.text_input("Unidade")
                     if st.form_submit_button("🚀 CADASTRAR TAG", use_container_width=True):
                         if n_tag:
                             nova_linha = [n_tag, "", "", "", "", "", "AGUARDANDO PROG", disc, n_desc, n_area, n_doc, n_fam, "", n_uni, "", "", ""]
                             ws_atual.append_row(nova_linha)
-                            st.success(f"✅ TAG {n_tag} cadastrada!")
+                            st.success(f"✅ TAG {n_tag} cadastrada com sucesso!")
                             st.cache_resource.clear()
+                            # Rerun removido para manter a mensagem de sucesso visível
                         else: st.error("O campo TAG é obrigatório.")
-
         with col_del:
             with st.expander("🗑️ DELETAR TAG DO BANCO"):
-                tag_para_del = st.selectbox("Selecione a TAG:", [""] + sorted(df_atual['TAG'].unique().tolist()), key="del_box")
+                tag_para_del = st.selectbox("Selecione a TAG para DELETAR:", [""] + sorted(df_atual['TAG'].unique().tolist()), key="del_box")
                 conf_del = st.checkbox("Confirmar exclusão definitiva")
-                if st.button("🔴 EXCLUIR TAG") and tag_para_del and conf_del:
+                if st.button("🔴 EXCLUIR TAG SELECIONADA") and tag_para_del and conf_del:
                     cell = ws_atual.find(tag_para_del, in_column=1)
                     if cell:
                         ws_atual.delete_rows(cell.row)
-                        st.cache_resource.clear(); st.rerun()
+                        st.cache_resource.clear()
+                        st.rerun()
 
         st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], use_container_width=True, hide_index=True)
 
     elif aba == "📊 CURVA S":
-        # Estrutura do gráfico exatamente como a sua original
         st.subheader(f"📊 Curva S e Avanço - {disc}")
         total_t = len(df_atual)
         montados = len(df_atual[df_atual['STATUS'] == 'MONTADO'])
