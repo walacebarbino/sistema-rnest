@@ -23,8 +23,7 @@ def exportar_excel_com_cabecalho(df, titulo_relatorio):
         fmt_sub = workbook.add_format({'font_size': 10, 'italic': True})
         try:
             worksheet.insert_image('A1', 'LOGO2.png', {'x_scale': 0.4, 'y_scale': 0.4})
-        except:
-            pass
+        except: pass
         worksheet.merge_range('C3:F5', titulo_relatorio.upper(), fmt_titulo)
         worksheet.write('A7', f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", fmt_sub)
         for i, col in enumerate(df.columns):
@@ -38,10 +37,9 @@ if 'disciplina_ativa' not in st.session_state: st.session_state['disciplina_ativ
 
 st.markdown("""
     <style>
-    [data-testid="stSidebar"] [data-testid="stImage"] { padding: 0px !important; margin-top: -60px !important; margin-left: -20px !important; margin-right: -20px !important; width: calc(100% + 40px) !important; }
+    [data-testid="stSidebar"] [data-testid="stImage"] { padding: 0px !important; margin-top: -60px !important; margin-left: -20px !important; width: calc(100% + 40px) !important; }
     [data-testid="stSidebar"] [data-testid="stImage"] img { width: 100% !important; height: auto !important; border-radius: 0px !important; }
-    [data-testid="column"] { padding-left: 5px !important; padding-right: 5px !important; }
-    .stDateInput div, .stTextInput div, .stNumberInput div, .stSelectbox div { height: 45px !important; }
+    .stDateInput div, .stTextInput div, .stSelectbox div { height: 45px !important; }
     label p { font-weight: bold !important; font-size: 14px !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -172,20 +170,16 @@ if not df_atual.empty:
                         st.cache_resource.clear(); st.rerun()
         with col_del:
             with st.expander("🗑️ DELETAR TAG"):
-                # CORREÇÃO 4: Deleção robusta com chave única e limpeza de estado
-                t_del = st.selectbox("TAG para Deletar:", [""] + sorted(df_atual['TAG'].unique().tolist()), key="sb_del_unico")
-                confirm_check = st.checkbox("Confirmar exclusão definitiva", key="ck_del_confirm")
-                if st.button("🔴 EXCLUIR DEFINITIVO", use_container_width=True):
-                    if t_del and confirm_check:
-                        cell = ws_atual.find(t_del, in_column=1)
-                        if cell:
-                            ws_atual.delete_rows(cell.row)
-                            st.cache_resource.clear()
-                            # Limpeza de chaves de estado para evitar tela preta
-                            for k in ["sb_del_unico", "ck_del_confirm"]:
-                                if k in st.session_state: del st.session_state[k]
-                            st.rerun()
-                if st.button("⚪ CANCELAR", use_container_width=True): st.rerun()
+                t_del = st.selectbox("TAG para Deletar:", [""] + sorted(df_atual['TAG'].unique().tolist()), key="sb_del_seguro")
+                conf = st.checkbox("Confirmar exclusão", key="ck_del_seguro")
+                if st.button("🔴 EXCLUIR DEFINITIVO") and t_del and conf:
+                    cell = ws_atual.find(t_del, in_column=1)
+                    if cell:
+                        ws_atual.delete_rows(cell.row)
+                        st.cache_resource.clear()
+                        for k in ["sb_del_seguro", "ck_del_seguro"]: 
+                            if k in st.session_state: del st.session_state[k]
+                        st.rerun()
 
         st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], use_container_width=True, hide_index=True)
 
@@ -217,20 +211,32 @@ if not df_atual.empty:
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total", len(df_atual)); m2.metric("Montados ✅", len(df_atual[df_atual['STATUS']=='MONTADO']))
         m3.metric("Programados 📅", len(df_atual[df_atual['STATUS']=='PROGRAMADO'])); m4.metric("Aguardando ⏳", len(df_atual[df_atual['STATUS']=='AGUARDANDO PROG']))
-        st.divider()
         
-        st.markdown("### 📈 AVANÇO POR SEMANA")
-        semanas = sorted(df_atual['SEMANA OBRA'].unique(), reverse=True)
-        sem_sel = st.selectbox("Selecione a Semana:", semanas if semanas else ["-"])
+        st.divider()
+        st.markdown("### 📅 PROGRAMADO PRODUÇÃO")
+        semanas_prog = sorted(df_atual[df_atual['STATUS'] == 'PROGRAMADO']['SEMANA OBRA'].unique())
+        sem_sel_p = st.selectbox("Filtrar Programação por Semana:", ["TODAS"] + semanas_prog)
+        df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
+        if sem_sel_p != "TODAS": df_p = df_p[df_p['SEMANA OBRA'] == sem_sel_p]
+        st.dataframe(df_p[['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']], use_container_width=True, hide_index=True)
+        if not df_p.empty:
+            st.download_button("📥 EXPORTAR PROGRAMADO", exportar_excel_com_cabecalho(df_p[['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']], "PROGRAMAÇÃO"), f"Prog_{disc}.xlsx", use_container_width=True)
+
+        st.divider()
+        st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
+        df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
+        st.dataframe(df_pend[['TAG', 'DESCRIÇÃO', 'ÁREA', 'STATUS', 'PREVISTO', 'OBS']], use_container_width=True, hide_index=True)
+        if not df_pend.empty:
+            st.download_button("📥 EXPORTAR PENDÊNCIAS", exportar_excel_com_cabecalho(df_pend[['TAG', 'DESCRIÇÃO', 'ÁREA', 'STATUS', 'PREVISTO', 'OBS']], "PENDENCIAS"), f"Pendencias_{disc}.xlsx", use_container_width=True)
+
+        st.divider()
+        st.markdown("### 📈 AVANÇO POR SEMANA (REALIZADO)")
+        semanas_disp = sorted(df_atual['SEMANA OBRA'].unique(), reverse=True)
+        sem_sel = st.selectbox("Selecione a Semana de Montagem:", semanas_disp if semanas_disp else ["-"])
         df_sem = df_atual[(df_atual['SEMANA OBRA'] == sem_sel) & (df_atual['STATUS'] == 'MONTADO')]
         st.dataframe(df_sem[['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']], use_container_width=True, hide_index=True)
-        
-        # CORREÇÃO 2: Proteção contra Excel vazio
         if not df_sem.empty:
-            excel_sem = exportar_excel_com_cabecalho(df_sem[['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']], f"AVANÇO SEMANA {sem_sel}")
-            st.download_button(f"📥 EXPORTAR SEMANA {sem_sel}", excel_sem, f"Semana_{sem_sel}.xlsx", use_container_width=True)
-        else:
-            st.warning("Sem dados montados para exportar nesta semana.")
+            st.download_button(f"📥 EXPORTAR SEMANA {sem_sel}", exportar_excel_com_cabecalho(df_sem[['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']], f"AVANÇO SEMANA {sem_sel}"), f"Avanco_Sem_{sem_sel}.xlsx", use_container_width=True)
 
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
         st.subheader("📤 Exportação e Importação")
@@ -240,12 +246,10 @@ if not df_atual.empty:
             mod = df_atual[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS', 'PREVISTO']].head(5)
             b_m = BytesIO(); mod.to_excel(b_m, index=False)
             st.download_button("📥 BAIXAR MODELO", b_m.getvalue(), "modelo.xlsx", use_container_width=True)
-            
         with c2:
             st.info("🚀 IMPORTAÇÃO")
             up = st.file_uploader("Upload Excel:", type="xlsx")
             if up and st.button("🚀 EXECUTAR IMPORTAÇÃO", use_container_width=True):
-                # CORREÇÃO 5: Identificador de TAGs não encontradas
                 df_up = pd.read_excel(up).astype(str)
                 df_up.columns = [str(c).strip().upper() for c in df_up.columns]
                 lista_m = ws_atual.get_all_values()
@@ -265,18 +269,13 @@ if not df_atual.empty:
                                     lista_m[i+1][idx_m[c.upper()]] = val
                             sucesso += 1; achou = True; break
                     if not achou: falhas.append(tag_i)
-                if sucesso: 
-                    ws_atual.update('A1', lista_m); st.success(f"{sucesso} TAGs atualizadas!")
+                if sucesso: ws_atual.update('A1', lista_m); st.success(f"{sucesso} TAGs atualizadas!")
                 if falhas:
-                    st.warning(f"⚠️ {len(falhas)} TAGs do Excel não existem no banco:")
-                    st.code(", ".join(falhas))
-
+                    st.warning(f"⚠️ {len(falhas)} TAGs não encontradas:"); st.code(", ".join(falhas))
         with c3:
             st.info("💾 BASE COMPLETA")
-            # CORREÇÃO 3: Datas formatadas DD/MM/AAAA na Base Completa
             df_exp = df_atual.copy()
             for c in ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT']:
                 if c in df_exp.columns:
                     df_exp[c] = pd.to_datetime(df_exp[c], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y').replace('NaT', '')
-            excel_full = exportar_excel_com_cabecalho(df_exp, f"BASE COMPLETA {disc}")
-            st.download_button("📥 EXPORTAR BASE", excel_full, f"Base_{disc}.xlsx", use_container_width=True)
+            st.download_button("📥 EXPORTAR BASE", exportar_excel_com_cabecalho(df_exp, "BASE COMPLETA"), f"Base_{disc}.xlsx", use_container_width=True)
