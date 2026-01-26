@@ -146,13 +146,15 @@ if st.sidebar.button("🚪 SAIR", use_container_width=True):
     st.session_state['disciplina_ativa'] = None
     st.rerun()
 
+# Mapeamento para garantir que ws_atual seja sempre re-validado
+map_planilhas = {"ELÉTRICA": "BD_ELE", "INSTRUMENTAÇÃO": "BD_INST", "ESTRUTURA": "BD_ESTR"}
+
 if disc == "ELÉTRICA": df_atual, ws_atual = df_ele, ws_ele
 elif disc == "INSTRUMENTAÇÃO": df_atual, ws_atual = df_ins, ws_ins
 elif disc == "ESTRUTURA": df_atual, ws_atual = df_est, ws_est
 else: df_atual, ws_atual = pd.DataFrame(), None
 
 if not df_atual.empty:
-    # OTIMIZAÇÃO: Cálculo de Status Vetorizado
     cond_montado = (df_atual['DATA MONT'] != "") & (df_atual['DATA MONT'] != "DD/MM/YYYY")
     cond_prog = ((df_atual['DATA INIC PROG'] != "") | (df_atual['DATA FIM PROG'] != "")) & ~cond_montado
     df_atual['STATUS'] = "AGUARDANDO PROG"
@@ -185,19 +187,18 @@ if not df_atual.empty:
             v_obs = st.text_input("Observações:", value=dados_tag['OBS'])
             
             if st.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
+                # Re-conectar para evitar AttributeError de objeto em cache
+                ws_escrita = client.open(map_planilhas[disc]).get_worksheet(0)
                 f_prev = v_prev.strftime("%d/%m/%Y") if v_prev else ""
                 f_ini = v_ini.strftime("%d/%m/%Y") if v_ini else ""
                 f_fim = v_fim.strftime("%d/%m/%Y") if v_fim else ""
                 f_mont = v_mont.strftime("%d/%m/%Y") if v_mont else ""
                 updates = {'SEMANA OBRA': sem_input, 'PREVISTO': f_prev, 'DATA INIC PROG': f_ini, 'DATA FIM PROG': f_fim, 'DATA MONT': f_mont, 'STATUS': st_atual, 'OBS': v_obs}
-                
-                # OTIMIZAÇÃO: Update em lote (Batch Update) para ser mais rápido
                 valores_linha = df_atual.iloc[idx_base].tolist()
                 for col, val in updates.items():
                     if col in cols_map: valores_linha[cols_map[col]-1] = str(val)
-                
-                ws_atual.update(f"A{idx_base + 2}", [valores_linha])
-                st.cache_data.clear() # Limpa cache para atualizar a tabela
+                ws_escrita.update(f"A{idx_base + 2}", [valores_linha])
+                st.cache_data.clear()
                 st.success("Salvo com sucesso!"); st.rerun()
 
         st.divider()
@@ -214,8 +215,10 @@ if not df_atual.empty:
                     n_des = st.text_input("DESENHO (DOC)")
                     if st.form_submit_button("🚀 CADASTRAR NO BANCO"):
                         if n_tag:
+                            # Re-conectar para garantir que ws_escrita existe
+                            ws_escrita = client.open(map_planilhas[disc]).get_worksheet(0)
                             nova_linha = [n_tag, "", "", "", "", "", "AGUARDANDO PROG", n_disc, n_desc, n_area, n_des, n_fam, "", n_uni, "", "", ""]
-                            ws_atual.append_row(nova_linha)
+                            ws_escrita.append_row(nova_linha)
                             st.cache_data.clear()
                             st.success(f"TAG {n_tag} cadastrado!"); st.rerun()
                         else: st.error("O campo TAG é obrigatório.")
@@ -228,9 +231,10 @@ if not df_atual.empty:
                     c_btn_del, c_btn_can = st.columns(2)
                     if c_btn_del.button("🔴 CONFIRMAR EXCLUSÃO", use_container_width=True):
                         if confirm_del:
-                            cell = ws_atual.find(tag_para_deletar, in_column=1)
+                            ws_escrita = client.open(map_planilhas[disc]).get_worksheet(0)
+                            cell = ws_escrita.find(tag_para_deletar, in_column=1)
                             if cell: 
-                                ws_atual.delete_rows(cell.row)
+                                ws_escrita.delete_rows(cell.row)
                                 st.cache_data.clear()
                                 st.success("Removido!"); st.rerun()
                     if c_btn_can.button("⚪ CANCELAR", use_container_width=True): st.rerun()
@@ -314,7 +318,9 @@ if not df_atual.empty:
                     try:
                         df_up = pd.read_excel(up).astype(str)
                         df_up.columns = [str(c).strip().upper() for c in df_up.columns]
-                        lista_mestra = ws_atual.get_all_values()
+                        # Re-conectar para importar
+                        ws_escrita = client.open(map_planilhas[disc]).get_worksheet(0)
+                        lista_mestra = ws_escrita.get_all_values()
                         headers = [str(h).strip().upper() for h in lista_mestra[0]]
                         idx_map = {name: i for i, name in enumerate(headers)}
                         sucesso = 0; nao_encontrado = 0
@@ -332,7 +338,7 @@ if not df_atual.empty:
                                     sucesso += 1; achou = True; break
                             if not achou: nao_encontrado += 1
                         if sucesso > 0:
-                            ws_atual.update('A1', lista_mestra)
+                            ws_escrita.update('A1', lista_mestra)
                             st.cache_data.clear()
                             st.success(f"✅ IMPORTAÇÃO CONCLUÍDA!"); st.write(f"📊 **Resultado:** {sucesso} TAGs atualizadas.")
                             if nao_encontrado > 0: st.warning(f"⚠️ {nao_encontrado} TAGS do Excel não existem.")
