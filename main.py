@@ -14,10 +14,8 @@ DATA_INICIO_OBRA = datetime(2025, 9, 29)
 
 # --- FUNÇÃO PARA GERAR EXCEL COM CABEÇALHO ---
 def exportar_excel_com_cabecalho(df, titulo_relatorio):
-    # CORREÇÃO 2: Proteção contra Excel vazio
     if df.empty:
         return None
-        
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Relatorio', startrow=8)
@@ -104,7 +102,7 @@ def extrair_dados(nome_planilha):
         if len(data) > 1:
             df = pd.DataFrame(data[1:], columns=data[0])
             df.columns = df.columns.str.strip()
-            col_obj = ['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO', 'PREVISTO']
+            col_obj = ['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO', 'FAMÍLIA', 'UNIDADE', 'CONTRATO', 'PREVISTO']
             for c in col_obj:
                 if c not in df.columns: df[c] = ""
             for c in df.columns:
@@ -145,7 +143,6 @@ aba = st.sidebar.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S"
 if not df_atual.empty:
     df_atual['STATUS'] = df_atual.apply(lambda r: calcular_status_tag(r.get('DATA INIC PROG',''), r.get('DATA FIM PROG',''), r.get('DATA MONT','')), axis=1)
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
-    cfg_rel = {"TAG": st.column_config.TextColumn(width="medium"), "DESCRIÇÃO": st.column_config.TextColumn(width="large"), "OBS": st.column_config.TextColumn(width="large"), "DOCUMENTO": st.column_config.TextColumn(width="medium")}
 
     if aba == "📝 EDIÇÃO E QUADRO":
         st.subheader(f"📝 Edição por TAG - {disc}")
@@ -156,6 +153,7 @@ if not df_atual.empty:
         dados_tag = df_atual.iloc[idx_base]
         with c_sem:
             sem_input = st.text_input("Semana da Obra:", value=dados_tag['SEMANA OBRA'])
+        
         sug_ini, sug_fim = get_dates_from_week(sem_input)
         
         with st.form("form_edit_final"):
@@ -167,15 +165,14 @@ if not df_atual.empty:
             v_ini = c2.date_input("Início Prog", value=conv_dt(dados_tag['DATA INIC PROG'], sug_ini), format="DD/MM/YYYY")
             v_fim = c3.date_input("Fim Prog", value=conv_dt(dados_tag['DATA FIM PROG'], sug_fim), format="DD/MM/YYYY")
             v_mont = c4.date_input("Data Montagem", value=conv_dt(dados_tag['DATA MONT'], None), format="DD/MM/YYYY")
-            st_at = calcular_status_tag(v_ini, v_fim, v_mont)
-            st.info(f"Status Atualizado: **{st_at}**")
+            st.info(f"Status Atual: **{dados_tag['STATUS']}**")
             v_obs = st.text_input("Observações:", value=dados_tag['OBS'])
             if st.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
-                # CORREÇÃO 1: Evitar travamento ao salvar
                 f_prev = v_prev.strftime("%d/%m/%Y") if v_prev else ""
                 f_ini = v_ini.strftime("%d/%m/%Y") if v_ini else ""
                 f_fim = v_fim.strftime("%d/%m/%Y") if v_fim else ""
                 f_mont = v_mont.strftime("%d/%m/%Y") if v_mont else ""
+                st_at = calcular_status_tag(f_ini, f_fim, f_mont)
                 updates = {'SEMANA OBRA': sem_input, 'PREVISTO': f_prev, 'DATA INIC PROG': f_ini, 'DATA FIM PROG': f_fim, 'DATA MONT': f_mont, 'STATUS': st_at, 'OBS': v_obs}
                 for col, val in updates.items():
                     if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], str(val))
@@ -186,24 +183,31 @@ if not df_atual.empty:
         col_cad, col_del = st.columns(2)
         with col_cad:
             with st.expander("➕ CADASTRAR NOVO TAG"):
-                with st.form("form_novo_tag"):
+                with st.form("form_novo_tag_completo"):
                     n_tag = st.text_input("TAG *")
-                    if st.form_submit_button("🚀 CADASTRAR"):
+                    n_desc = st.text_input("Descrição")
+                    c_n1, c_n2 = st.columns(2)
+                    n_area = c_n1.text_input("Área")
+                    n_doc = c_n2.text_input("Documento")
+                    n_fam = c_n1.text_input("Família")
+                    n_uni = c_n2.text_input("Unidade")
+                    if st.form_submit_button("🚀 CADASTRAR TAG", use_container_width=True):
                         if n_tag:
-                            ws_atual.append_row([n_tag, "", "", "", "", "", "AGUARDANDO PROG", disc, "", "", "", "", "", "", "", "", ""])
+                            # Ordem exata das colunas do Google Sheets
+                            nova_linha = [n_tag, "", "", "", "", "", "AGUARDANDO PROG", disc, n_desc, n_area, n_doc, n_fam, "", n_uni, "", "", ""]
+                            ws_atual.append_row(nova_linha)
                             st.cache_resource.clear()
                             st.rerun()
+                        else: st.error("O campo TAG é obrigatório.")
         with col_del:
             with st.expander("🗑️ DELETAR TAG DO BANCO"):
-                # CORREÇÃO 4: Deleção robusta que limpa cache
-                tag_para_del = st.selectbox("TAG para DELETAR:", [""] + sorted(df_atual['TAG'].unique().tolist()), key="del_box")
-                conf_del = st.checkbox("Confirmar exclusão")
-                if st.button("🔴 CONFIRMAR EXCLUSÃO") and tag_para_del and conf_del:
+                tag_para_del = st.selectbox("Selecione a TAG para DELETAR:", [""] + sorted(df_atual['TAG'].unique().tolist()), key="del_box")
+                conf_del = st.checkbox("Confirmar exclusão definitiva")
+                if st.button("🔴 EXCLUIR TAG SELECIONADA") and tag_para_del and conf_del:
                     cell = ws_atual.find(tag_para_del, in_column=1)
                     if cell:
                         ws_atual.delete_rows(cell.row)
                         st.cache_resource.clear()
-                        if "del_box" in st.session_state: del st.session_state["del_box"]
                         st.rerun()
 
         st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], use_container_width=True, hide_index=True)
@@ -224,11 +228,9 @@ if not df_atual.empty:
         todos_meses = sorted(list(set(prev_mes.index.tolist() + real_mes.index.tolist())))
         x_eixo = [str(m) for m in todos_meses]
         fig = go.Figure()
-        fig.add_trace(go.Bar(x=x_eixo, y=prev_mes.reindex(todos_meses, fill_value=0), name='Previsto Mensal', marker_color='#2ecc71', opacity=0.6))
-        fig.add_trace(go.Bar(x=x_eixo, y=real_mes.reindex(todos_meses, fill_value=0), name='Realizado Mensal', marker_color='#3498db', opacity=0.6))
-        fig.add_trace(go.Scatter(x=x_eixo, y=prev_mes.reindex(todos_meses, fill_value=0).cumsum(), name='Prev. Acumulado', line=dict(color='#27ae60', width=4)))
+        fig.add_trace(go.Scatter(x=x_eixo, y=prev_mes.reindex(todos_meses, fill_value=0).cumsum(), name='LB - Prev. Acumulado', line=dict(color='#27ae60', width=4)))
         fig.add_trace(go.Scatter(x=x_eixo, y=real_mes.reindex(todos_meses, fill_value=0).cumsum(), name='Real. Acumulado', line=dict(color='#e74c3c', width=4)))
-        fig.update_layout(template="plotly_dark", barmode='group', height=500)
+        fig.update_layout(template="plotly_dark", height=500)
         st.plotly_chart(fig, use_container_width=True)
 
     elif aba == "📋 RELATÓRIOS":
@@ -262,8 +264,6 @@ if not df_atual.empty:
         st.dataframe(df_sem[['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']], use_container_width=True, hide_index=True)
         if not df_sem.empty:
             st.download_button(f"📥 EXPORTAR SEMANA {s_sel}", exportar_excel_com_cabecalho(df_sem[['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']], f"AVANÇO SEMANA {s_sel}"), f"Avanco_Sem_{s_sel}.xlsx", use_container_width=True)
-        else:
-            st.warning(f"Nenhum item montado na semana {s_sel}.")
 
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
         st.subheader(f"📤 Exportação e Importação - {disc}")
@@ -282,7 +282,6 @@ if not df_atual.empty:
                 lista_m = ws_atual.get_all_values()
                 headers = [h.strip().upper() for h in lista_m[0]]
                 idx_m = {n: i for i, n in enumerate(headers)}
-                # CORREÇÃO 5: Identificar TAGs não encontradas
                 sucesso, falhas = 0, []
                 for _, r in df_up.iterrows():
                     t_imp = str(r.get('TAG','')).strip()
@@ -298,11 +297,9 @@ if not df_atual.empty:
                             sucesso += 1; achou = True; break
                     if not achou: falhas.append(t_imp)
                 if sucesso: ws_atual.update('A1', lista_m); st.success(f"{sucesso} TAGs atualizadas!")
-                if falhas:
-                    st.warning(f"⚠️ {len(falhas)} TAGs não encontradas no banco:"); st.code(", ".join(falhas))
+                if falhas: st.warning(f"⚠️ {len(falhas)} TAGs não encontradas:"); st.code(", ".join(falhas))
         with c3:
             st.info("💾 BASE COMPLETA")
-            # CORREÇÃO 3: Datas formatadas DD/MM/AAAA
             df_exp = df_atual.copy()
             for col in ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT']:
                 if col in df_exp.columns:
