@@ -298,69 +298,62 @@ if not df_atual.empty:
         st.download_button(f"📥 EXPORTAR SEMANA {semana_sel}", buf_r.getvalue(), f"Avanco_Semana_{semana_sel}_{disc}.xlsx")
 
     # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
-   elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
+   # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÃO (CORRIGIDA) ---
+    elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
         st.subheader(f"📤 Exportação e Importação - {disc}")
         c1, c2, c3 = st.columns(3)
+        
         with c1:
-            st.info("📄 **MODELO**")
+            st.info("📄 MODELO")
             mod = df_atual[['TAG', 'SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS', 'PREVISTO']].head(5)
             b_m = BytesIO(); mod.to_excel(b_m, index=False)
             st.download_button("📥 EXPORTAR MOD PLANILHA", b_m.getvalue(), "modelo_gmont.xlsx", use_container_width=True)
         
         with c2:
-            st.info("🚀 **IMPORTAÇÃO**")
-            up = st.file_uploader("Upload Excel:", type="xlsx", label_visibility="collapsed")
+            st.info("🚀 IMPORTAÇÃO")
+            up = st.file_uploader("Upload Excel:", type="xlsx")
             if up:
-                if st.button("🚀 IMPORTAR E LIMPAR DADOS", use_container_width=True):
+                if st.button("🚀 IMPORTAR E ATUALIZAR", use_container_width=True):
                     try:
-                        # Carrega o arquivo subido
                         df_up = pd.read_excel(up).astype(str)
-                        # Padroniza nomes das colunas para evitar erro de digitação
                         df_up.columns = [str(c).strip().upper() for c in df_up.columns]
                         
-                        # Obtém todos os dados atuais da planilha Google
                         lista_mestra = ws_atual.get_all_values()
                         headers = [str(h).strip().upper() for h in lista_mestra[0]]
                         idx_map = {name: i for i, name in enumerate(headers)}
                         
                         sucesso = 0
-                        erros = 0
-                        colunas_alvo = ['SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS', 'PREVISTO']
+                        nao_encontrado = 0
                         
-                        # Itera sobre as linhas do arquivo Excel subido
                         for _, r in df_up.iterrows():
                             tag_import = str(r.get('TAG', '')).strip()
-                            if tag_import in ['', 'nan', 'None']: continue
+                            if not tag_import or tag_import == 'nan': continue
                             
-                            encontrado = False
+                            achou = False
                             for i, row in enumerate(lista_mestra[1:]):
                                 if str(row[0]).strip() == tag_import:
-                                    # Se achou a TAG, atualiza os campos
-                                    for col in colunas_alvo:
-                                        if col.upper() in df_up.columns and col.upper() in idx_map:
+                                    for col in ['SEMANA OBRA', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'OBS', 'PREVISTO']:
+                                        if col.upper() in df_up.columns:
                                             val = str(r[col.upper()]).strip()
-                                            # Limpa valores nulos do pandas
-                                            if val.lower() in ['nan', 'none', 'nat', '0', 'dd/mm/yyyy']: val = ''
+                                            if val.lower() in ['nan', 'none', 'nat', 'dd/mm/yyyy']: val = ''
                                             lista_mestra[i+1][idx_map[col.upper()]] = val
                                     sucesso += 1
-                                    encontrado = True
+                                    achou = True
                                     break
-                            if not encontrado: erros += 1
+                            if not achou: nao_encontrado += 1
 
                         if sucesso > 0:
-                            # Envia a matriz completa de volta para o Google Sheets (muito mais rápido)
                             ws_atual.update('A1', lista_mestra)
-                            st.success(f"✅ LOG DE IMPORTAÇÃO: {sucesso} registros atualizados com sucesso!")
-                            if erros > 0:
-                                st.warning(f"⚠️ {erros} TAGS do arquivo não foram encontradas no banco de dados.")
-                            st.balloons()
+                            st.success(f"✅ IMPORTAÇÃO CONCLUÍDA!")
+                            st.write(f"📊 **Resultado:** {sucesso} TAGs atualizadas.")
+                            if nao_encontrado > 0:
+                                st.warning(f"⚠️ {nao_encontrado} TAGS do Excel não existem no banco de dados.")
                         else:
-                            st.error("❌ Nenhuma TAG correspondente foi encontrada no arquivo enviado.")
-                            
+                            st.error("❌ Nenhuma TAG correspondente encontrada no arquivo.")
                     except Exception as e:
-                        st.error(f"❌ ERRO NA IMPORTAÇÃO: Verifique se o arquivo está no formato correto. Detalhes: {e}")
+                        st.error(f"❌ Erro no processamento: {e}")
 
         with c3:
-            st.info("💾 **BASE COMPLETA**")
+            st.info("💾 BASE COMPLETA")
             b_f = BytesIO(); df_atual.to_excel(b_f, index=False)
             st.download_button("📥 EXPORTAR BASE", b_f.getvalue(), f"Base_{disc}.xlsx", use_container_width=True)
