@@ -300,60 +300,60 @@ if not df_atual.empty:
         st.plotly_chart(fig, use_container_width=True)
 
     # --- ABA 3: RELATÓRIOS (AJUSTADO COM FILTRO DE SEMANA E EXCEL MELHORADO) ---
-    elif aba == "📋 RELATÓRIOS":
-        st.subheader(f"📋 Painel de Relatórios - {disc}")
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total", len(df_atual)); m2.metric("Montados ✅", len(df_atual[df_atual['STATUS']=='MONTADO']))
-        m3.metric("Programados 📅", len(df_atual[df_atual['STATUS']=='PROGRAMADO'])); m4.metric("Aguardando ⏳", len(df_atual[df_atual['STATUS']=='AGUARDANDO PROG']))
-        st.divider()
- 
-        st.markdown("### 📅 PROGRAMADO PRODUÇÃO")
-        # Novo Filtro de Semana solicitado
-        semanas_prog = sorted(df_atual[df_atual['STATUS'] == 'PROGRAMADO']['SEMANA OBRA'].unique())
-        sem_sel_p = st.selectbox("Filtrar Programação por Semana:", ["TODAS"] + semanas_prog)
- 
-        df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
-        if sem_sel_p != "TODAS":
-            df_p = df_p[df_p['SEMANA OBRA'] == sem_sel_p]
- 
-        cols_p = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
-        st.dataframe(df_p[cols_p], use_container_width=True, hide_index=True, column_config=cfg_rel)
- 
-        # Gerar Excel Formatado (Auto-ajustável)
-        excel_p = exportar_excel_com_cabecalho(df_p[cols_p], f"RELATÓRIO DE PROGRAMAÇÃO - SEMANA {sem_sel_p} - {disc}")
-        st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", excel_p, f"Programado_{sem_sel_p}_{disc}.xlsx", use_container_width=True)
- 
-        st.divider()
- 
-        st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
-        df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
-        cols_pend = ['TAG', 'DESCRIÇÃO', 'ÁREA', 'STATUS', 'PREVISTO', 'OBS']
-        cfg_pend_br = {**cfg_rel, "PREVISTO": st.column_config.DateColumn("PREVISTO", format="DD/MM/YYYY")}
-        st.dataframe(df_pend[cols_pend], use_container_width=True, hide_index=True, column_config=cfg_pend_br)
- 
-        # Gerar Excel Formatado (Auto-ajustável)
-        excel_pend = exportar_excel_com_cabecalho(df_pend[cols_pend], f"LISTA DE PENDÊNCIAS - {disc}")
-        st.download_button("📥 EXPORTAR PENDÊNCIAS", excel_pend, f"Pendencias_{disc}.xlsx", use_container_width=True)
- 
-        st.divider()
- 
-        st.markdown("### 📈 AVANÇO POR SEMANA (REALIZADO)")
-        semanas_disponiveis = sorted(df_atual['SEMANA OBRA'].unique(), reverse=True)
-        semana_sel = st.selectbox("Selecione a Semana de Montagem:", semanas_disponiveis if len(semanas_disponiveis) > 0 else ["-"])
- 
-        # Filtra os dados
-        df_semana = df_atual[(df_atual['SEMANA OBRA'] == semana_sel) & (df_atual['STATUS'] == 'MONTADO')]
-        cols_av = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
- 
-        st.dataframe(df_semana[cols_av], use_container_width=True, hide_index=True, column_config={**cfg_rel, "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY")})
- 
-        # Só gera o Excel se houver dados, corrigindo o ValueError
-        if not df_semana.empty:
-            excel_semana = exportar_excel_com_cabecalho(df_semana[cols_av], f"RELATÓRIO DE AVANÇO - SEMANA {semana_sel} - {disc}")
-            st.download_button(f"📥 EXPORTAR SEMANA {semana_sel}", excel_semana, f"Avanco_Semana_{semana_sel}_{disc}.xlsx", use_container_width=True)
-        else:
-            st.warning(f"Nenhum item montado na semana {semana_sel} para exportar.")
+   # --- ABA 3: RELATÓRIOS ---
+    elif aba == "📋 RELATÓRIOS":
+        st.subheader(f"📋 Painel de Relatórios - {disc}")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Total", len(df_atual))
+        m2.metric("Montados ✅", len(df_atual[df_atual['STATUS']=='MONTADO']))
+        m3.metric("Programados 📅", len(df_atual[df_atual['STATUS']=='PROGRAMADO']))
+        m4.metric("Aguardando ⏳", len(df_atual[df_atual['STATUS']=='AGUARDANDO PROG']))
+        st.divider()
+        
+        st.markdown("### 📅 PROGRAMADO PRODUÇÃO")
+        semanas_prog = sorted(df_atual[df_atual['STATUS'] == 'PROGRAMADO']['SEMANA OBRA'].unique())
+        sem_sel_p = st.selectbox("Filtrar Programação por Semana:", ["TODAS"] + semanas_prog)
+        
+        df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
+        if sem_sel_p != "TODAS":
+            df_p = df_p[df_p['SEMANA OBRA'] == sem_sel_p]
+            
+        cols_p = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
+        st.dataframe(df_p[cols_p], use_container_width=True, hide_index=True, column_config=cfg_rel)
+        
+        if not df_p.empty:
+            excel_p = exportar_excel_com_cabecalho(df_p[cols_p], f"RELATÓRIO DE PROGRAMAÇÃO - SEMANA {sem_sel_p} - {disc}")
+            st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", excel_p, f"Programado_{sem_sel_p}_{disc}.xlsx", use_container_width=True)
+        
+        st.divider()
+        
+        st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
+        df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
+        cols_pend = ['TAG', 'DESCRIÇÃO', 'ÁREA', 'STATUS', 'PREVISTO', 'OBS']
+        st.dataframe(df_pend[cols_pend], use_container_width=True, hide_index=True, column_config={**cfg_rel, "PREVISTO": st.column_config.DateColumn("PREVISTO", format="DD/MM/YYYY")})
+        
+        if not df_pend.empty:
+            excel_pend = exportar_excel_com_cabecalho(df_pend[cols_pend], f"LISTA DE PENDÊNCIAS - {disc}")
+            st.download_button("📥 EXPORTAR PENDÊNCIAS", excel_pend, f"Pendencias_{disc}.xlsx", use_container_width=True)
+        
+        st.divider()
+        
+        st.markdown("### 📈 AVANÇO POR SEMANA (REALIZADO)")
+        semanas_disponiveis = sorted(df_atual['SEMANA OBRA'].unique(), reverse=True)
+        semana_sel = st.selectbox("Selecione a Semana de Montagem:", semanas_disponiveis if len(semanas_disponiveis) > 0 else ["-"])
+        
+        df_semana = df_atual[(df_atual['SEMANA OBRA'] == semana_sel) & (df_atual['STATUS'] == 'MONTADO')]
+        cols_av = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
+        
+        st.dataframe(df_semana[cols_av], use_container_width=True, hide_index=True, column_config={**cfg_rel, "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY")})
+        
+        if not df_semana.empty:
+            excel_semana = exportar_excel_com_cabecalho(df_semana[cols_av], f"RELATÓRIO DE AVANÇO - SEMANA {semana_sel} - {disc}")
+            st.download_button(f"📥 EXPORTAR SEMANA {semana_sel}", excel_semana, f"Avanco_Semana_{semana_sel}_{disc}.xlsx", use_container_width=True)
+        else:
+            st.warning(f"Nenhum item montado na semana {semana_sel} para exportar.")
 
+  
     # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
         st.subheader(f"📤 Exportação e Importação - {disc}")
