@@ -231,6 +231,8 @@ if not df_atual.empty:
                     if col in cols_map: ws_atual.update_cell(idx_base + 2, cols_map[col], str(val))
                 st.success("Salvo com sucesso!"); st.rerun()
         st.divider()
+        
+       st.divider()
         col_cad, col_del = st.columns(2)
         with col_cad:
             with st.expander("➕ CADASTRAR NOVO TAG", expanded=False):
@@ -248,35 +250,30 @@ if not df_atual.empty:
                         if n_tag:
                             nova_linha = [n_tag, "", "", "", "", "", "AGUARDANDO PROG", n_disc, n_desc, n_area, n_des, n_fam, "", n_uni, "", "", ""]
                             ws_atual.append_row(nova_linha)
+                            st.cache_resource.clear()
                             st.success(f"TAG {n_tag} cadastrado!"); st.rerun()
                         else: st.error("O campo TAG é obrigatório.")
-                            
-      with col_del:
+
+        with col_del:
             with st.expander("🗑️ DELETAR TAG DO BANCO", expanded=False):
-                # Usamos uma key única para evitar conflitos no estado do Streamlit
-                tag_para_deletar = st.selectbox("Selecione a TAG para DELETAR:", [""] + sorted(df_atual['TAG'].unique().tolist()), key="del_selectbox")
+                opcoes_del = [""] + sorted(df_atual['TAG'].unique().tolist())
+                tag_para_deletar = st.selectbox("Selecione a TAG para DELETAR:", opcoes_del, key="sb_delecao")
                 
                 if tag_para_deletar:
-                    st.warning(f"🚨 ATENÇÃO: Deseja apagar a TAG {tag_para_deletar}?")
-                    confirm_del = st.checkbox("Eu confirmo que desejo apagar este registro", key="confirm_delete_check")
+                    st.warning(f"🚨 ATENÇÃO: {tag_para_deletar}")
+                    confirm_del = st.checkbox("Confirmar exclusão definitiva", key="ck_confirm_del")
                     
                     c_btn_del, c_btn_can = st.columns(2)
-                    
                     if c_btn_del.button("🔴 CONFIRMAR EXCLUSÃO", use_container_width=True):
                         if confirm_del:
-                            try:
-                                cell = ws_atual.find(tag_para_deletar, in_column=1)
-                                if cell:
-                                    ws_atual.delete_rows(cell.row)
-                                    st.success("Removido com sucesso!")
-                                    # Limpa o cache para que o sistema perceba que a linha sumiu do Google Sheets
-                                    st.cache_resource.clear()
-                                    st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro ao deletar no banco: {e}")
-                        else:
-                            st.error("Você precisa marcar a caixa de confirmação.")
-
+                            cell = ws_atual.find(tag_para_deletar, in_column=1)
+                            if cell:
+                                ws_atual.delete_rows(cell.row)
+                                st.cache_resource.clear()
+                                # Limpa o estado para evitar tela preta na próxima deleção
+                                for key in ["sb_delecao", "ck_confirm_del"]:
+                                    if key in st.session_state: del st.session_state[key]
+                                st.rerun()
                     if c_btn_can.button("⚪ CANCELAR", use_container_width=True):
                         st.rerun()
                         
