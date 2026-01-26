@@ -1,19 +1,17 @@
-app.py
-logic/
-    gsheet.py
-    security.py
-    transform.py
-    export.py
-    audit.py
-ui/
-    login.py
-    tags.py
-    curva.py
-    relatorios.py
-
-
 import streamlit as st
+import base64, json
+import pandas as pd
+from datetime import datetime
+from gspread import authorize
+from google.oauth2.service_account import Credentials
+from io import BytesIO
+import xlsxwriter
+import logging
+import plotly.express as px
 
+###############################################################################
+# LOGIN SECURITY
+###############################################################################
 def check_login():
     if "logged" not in st.session_state:
         st.session_state.logged = False
@@ -24,24 +22,16 @@ def login_form():
     if st.button("Entrar"):
         secret_pin = st.secrets.get("APP_PIN", None)
         if secret_pin is None:
-            st.error("PIN não configurado no st.secrets")
+            st.error("PIN não configurado em st.secrets")
         elif pin_input == secret_pin:
             st.session_state.logged = True
             st.success("Acesso autorizado")
         else:
             st.error("PIN inválido")
 
-
-APP_PIN = "1234"
-
-
-import base64, json
-import pandas as pd
-from datetime import datetime
-from gspread import authorize
-from google.oauth2.service_account import Credentials
-import streamlit as st
-
+###############################################################################
+# GOOGLE SHEETS
+###############################################################################
 @st.cache_resource
 def get_client():
     b64 = st.secrets["GOOGLE_CREDENTIALS_BASE64"]
@@ -50,20 +40,16 @@ def get_client():
     creds = Credentials.from_service_account_info(creds_json, scopes=scopes)
     return authorize(creds)
 
-def load_sheet(spread_name: str, worksheet_name: str) -> pd.DataFrame:
+def load_sheet(spread_name: str, worksheet_name: str):
     gc = get_client()
     ws = gc.open(spread_name).worksheet(worksheet_name)
     values = ws.get_values()
     if not values:
-        return pd.DataFrame()
+        return pd.DataFrame(), ws
     df = pd.DataFrame(values[1:], columns=values[0])
     return df, ws
 
 def batch_update_row(ws, row: int, columns: list, values: list):
-    """
-    Atualiza uma linha completa com batch_update ao invés de múltiplos update_cell.
-    columns precisa estar na mesma ordem da planilha.
-    """
     col_start = 1
     col_end = len(columns)
     ws.batch_update([{
@@ -72,16 +58,13 @@ def batch_update_row(ws, row: int, columns: list, values: list):
     }])
 
 def batch_delete_rows(ws, rows: list):
-    """
-    Deleta múltiplas linhas de forma ordenada (inverter ordem para não deslocar).
-    """
     rows = sorted(rows, reverse=True)
     for r in rows:
         ws.delete_rows(r)
 
-import pandas as pd
-from datetime import datetime
-
+###############################################################################
+# TRANSFORM
+###############################################################################
 DATE_COLS = ["DATA_MONTADO", "DATA_INICIO", "DATA_FINAL"]
 
 def to_datetime(df):
@@ -97,12 +80,9 @@ def compute_status(row):
         return "PROGRAMADO"
     return "AGUARDANDO PROG"
 
-
-from io import BytesIO
-import pandas as pd
-from datetime import datetime
-import xlsxwriter
-
+###############################################################################
+# EXPORT EXCEL
+###############################################################################
 def export_excel(df: pd.DataFrame, titulo: str, disciplina: str, logo_path: str = None):
     output = BytesIO()
     current_week = datetime.now().isocalendar().week
@@ -129,28 +109,24 @@ def export_excel(df: pd.DataFrame, titulo: str, disciplina: str, logo_path: str 
     output.seek(0)
     return output
 
-
-from datetime import datetime
-import logging
-
+###############################################################################
+# AUDIT LOG
+###############################################################################
 logging.basicConfig(filename="audit.log", level=logging.INFO)
 
 def log_event(user, action, tag):
     logging.info(f"{datetime.now()} | {user} | {action} | {tag}")
 
-
-import streamlit as st
-import pandas as pd
-from logic.gsheet import load_sheet, batch_update_row, batch_delete_rows
-from logic.transform import to_datetime, compute_status
-from logic.audit import log_event
-
+###############################################################################
+# UI: TAGS
+###############################################################################
 SPREAD = "PLANILHA_PROJETO"
 
 def manage_tags():
+    st.header("Gerenciar Tags")
     disciplina = st.selectbox("Disciplina", ["ELÉTRICA", "INSTRUMENTAÇÃO", "ESTRUTURA"])
     df, ws = load_sheet(SPREAD, disciplina)
-    
+
     if df.empty:
         st.warning("Planilha vazia.")
         return
@@ -159,52 +135,51 @@ def manage_tags():
     df["STATUS"] = df.apply(compute_status, axis=1)
 
     tag = st.text_input("TAG para editar/deletar")
-    if tag:
-        matches = df[df["TAG"] == tag]
-        if matches.empty:
-            st.error("TAG não encontrada.")
-        elif len(matches) > 1:
-            st.error("TAG duplicada. Corrija a planilha.")
-        else:
-            row_idx = matches.index[0] + 2
-            st.dataframe(matches)
+    if not tag:
+        return
 
-            nova_data_m = st.date_input("DATA MONTADO", matches["DATA_MONTADO"].iloc[0] or None)
-            
-            if st.button("Salvar"):
-                colunas = list(df.columns)
-                valores = []
-                for c in colunas:
-                    val = matches[c].iloc[0]
-                    if c == "DATA_MONTADO":
-                        val = nova_data_m.strftime("%Y-%m-%d") if nova_data_m else ""
-                    else:
-                        if pd.notnull(val) and hasattr(val, "strftime"):
-                            val = val.strftime("%Y-%m-%d")
-                        val = str(val)
-                    valores.append(val)
+    matches = df[df["TAG"] == tag]
+    if matches.empty:
+        st.error("TAG não encontrada.")
+        return
+    if len(matches) > 1:
+        st.error("TAG duplicada. Corrija a planilha.")
+        return
 
-                batch_update_row(ws, row_idx, colunas, valores)
-                log_event("user", "edit", tag)
-                st.success("Atualizado com sucesso.")
+    row_idx = matches.index[0] + 2
+    st.dataframe(matches)
 
-            if st.button("Deletar"):
-                batch_delete_rows(ws, [row_idx])
-                log_event("user", "delete", tag)
-                st.success("Excluído.")
+    data_original = matches["DATA_MONTADO"].iloc[0]
+    nova_data = st.date_input("DATA MONTADO", data_original if pd.notnull(data_original) else None)
 
+    if st.button("Salvar"):
+        colunas = list(df.columns)
+        valores = []
+        for c in colunas:
+            val = matches[c].iloc[0]
+            if c == "DATA_MONTADO":
+                val = nova_data.strftime("%Y-%m-%d") if nova_data else ""
+            elif pd.notnull(val) and hasattr(val, "strftime"):
+                val = val.strftime("%Y-%m-%d")
+            valores.append(str(val))
 
-import streamlit as st
-from logic.gsheet import load_sheet
-from logic.transform import to_datetime, compute_status
-import pandas as pd
-import plotly.express as px
+        batch_update_row(ws, row_idx, colunas, valores)
+        log_event("user", "edit", tag)
+        st.success("Atualizado com sucesso.")
 
-SPREAD = "PLANILHA_PROJETO"
+    if st.button("Deletar"):
+        batch_delete_rows(ws, [row_idx])
+        log_event("user", "delete", tag)
+        st.success("Excluído.")
 
+###############################################################################
+# UI: CURVA S
+###############################################################################
 def curva_s():
+    st.header("Curva S")
     disciplina = st.selectbox("Disciplina", ["ELÉTRICA", "INSTRUMENTAÇÃO", "ESTRUTURA"])
     df, ws = load_sheet(SPREAD, disciplina)
+
     df = to_datetime(df)
     df["STATUS"] = df.apply(compute_status, axis=1)
 
@@ -218,12 +193,9 @@ def curva_s():
     st.subheader("Curva Mensal")
     st.plotly_chart(px.bar(hist, x="MES", y="quantidade"))
 
-
-import streamlit as st
-from logic.security import check_login, login_form
-from ui.tags import manage_tags
-from ui.curva import curva_s
-
+###############################################################################
+# APP ENTRYPOINT
+###############################################################################
 check_login()
 
 if not st.session_state.logged:
