@@ -250,18 +250,36 @@ if not df_atual.empty:
                             ws_atual.append_row(nova_linha)
                             st.success(f"TAG {n_tag} cadastrado!"); st.rerun()
                         else: st.error("O campo TAG é obrigatório.")
+                            
         with col_del:
             with st.expander("🗑️ DELETAR TAG DO BANCO", expanded=False):
-                tag_para_deletar = st.selectbox("Selecione a TAG para DELETAR:", [""] + sorted(df_atual['TAG'].unique().tolist()))
+                # Usamos uma key única para evitar conflitos no estado do Streamlit
+                tag_para_deletar = st.selectbox("Selecione a TAG para DELETAR:", [""] + sorted(df_atual['TAG'].unique().tolist()), key="del_selectbox")
+                
                 if tag_para_deletar:
-                    st.warning(f"🚨 ATENÇÃO: {tag_para_deletar}")
-                    confirm_del = st.checkbox("Eu confirmo que desejo apagar este registro")
+                    st.warning(f"🚨 ATENÇÃO: Deseja apagar a TAG {tag_para_deletar}?")
+                    confirm_del = st.checkbox("Eu confirmo que desejo apagar este registro", key="confirm_delete_check")
+                    
                     c_btn_del, c_btn_can = st.columns(2)
+                    
                     if c_btn_del.button("🔴 CONFIRMAR EXCLUSÃO", use_container_width=True):
                         if confirm_del:
-                            cell = ws_atual.find(tag_para_deletar, in_column=1)
-                            if cell: ws_atual.delete_rows(cell.row); st.success("Removido!"); st.rerun()
-                    if c_btn_can.button("⚪ CANCELAR", use_container_width=True): st.rerun()
+                            try:
+                                cell = ws_atual.find(tag_para_deletar, in_column=1)
+                                if cell:
+                                    ws_atual.delete_rows(cell.row)
+                                    st.success("Removido com sucesso!")
+                                    # Limpa o cache para que o sistema perceba que a linha sumiu do Google Sheets
+                                    st.cache_resource.clear()
+                                    st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao deletar no banco: {e}")
+                        else:
+                            st.error("Você precisa marcar a caixa de confirmação.")
+
+                    if c_btn_can.button("⚪ CANCELAR", use_container_width=True):
+                        st.rerun()
+                        
         st.divider()
         col_dates_cfg = {
             "TAG": st.column_config.TextColumn("TAG"),
