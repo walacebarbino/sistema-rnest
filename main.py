@@ -12,12 +12,12 @@ from datetime import datetime, timedelta
 st.set_page_config(page_title="SISTEMA G-MONT", layout="wide")
 DATA_INICIO_OBRA = datetime(2025, 9, 29) 
 
-# --- FUNÇÃO PARA GERAR EXCEL COM CABEÇALHO (NOVA MODIFICAÇÃO) ---
+# --- FUNÇÃO PARA GERAR EXCEL COM CABEÇALHO (AJUSTADA: AUTO-FIT E ESPAÇAMENTO) ---
 def exportar_excel_com_cabecalho(df, titulo_relatorio):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        # O dataframe começa na linha 6 (index 5)
-        df.to_excel(writer, index=False, sheet_name='Relatorio', startrow=5)
+        # Aumentado para startrow=8 para evitar que a imagem sobreponha o texto
+        df.to_excel(writer, index=False, sheet_name='Relatorio', startrow=8)
         
         workbook  = writer.book
         worksheet = writer.sheets['Relatorio']
@@ -26,18 +26,24 @@ def exportar_excel_com_cabecalho(df, titulo_relatorio):
         fmt_titulo = workbook.add_format({'bold': True, 'font_size': 14, 'align': 'center', 'valign': 'vcenter'})
         fmt_sub = workbook.add_format({'font_size': 10, 'italic': True})
         
-        # 1. Tentar Inserir Logo
+        # 1. Tentar Inserir Logo (Posição fixa no topo)
         try:
             worksheet.insert_image('A1', 'LOGO2.png', {'x_scale': 0.4, 'y_scale': 0.4})
         except:
             pass
             
         # 2. Título Centralizado
-        worksheet.merge_range('C2:F3', titulo_relatorio.upper(), fmt_titulo)
+        worksheet.merge_range('C3:F5', titulo_relatorio.upper(), fmt_titulo)
         
         # 3. Data de Emissão
-        worksheet.write('A5', f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", fmt_sub)
+        worksheet.write('A7', f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", fmt_sub)
         
+        # 4. AJUSTE AUTOMÁTICO DE COLUNAS (AutoFit)
+        for i, col in enumerate(df.columns):
+            # Calcula a largura ideal baseada no maior texto da coluna ou no cabeçalho
+            column_len = max(df[col].astype(str).map(len).max(), len(col)) + 3
+            worksheet.set_column(i, i, column_len)
+            
     return output.getvalue()
 
 # --- CONTROLE DE ACESSO E DISCIPLINAS ---
@@ -293,7 +299,7 @@ if not df_atual.empty:
         fig.update_layout(template="plotly_dark", barmode='group', height=500, legend=dict(orientation="h", y=1.02))
         st.plotly_chart(fig, use_container_width=True)
 
-    # --- ABA 3: RELATÓRIOS (ALTERAÇÃO SOLICITADA: CABEÇALHOS NO EXCEL) ---
+    # --- ABA 3: RELATÓRIOS (AJUSTADO COM FILTRO DE SEMANA E EXCEL MELHORADO) ---
     elif aba == "📋 RELATÓRIOS":
         st.subheader(f"📋 Painel de Relatórios - {disc}")
         m1, m2, m3, m4 = st.columns(4)
@@ -302,13 +308,20 @@ if not df_atual.empty:
         st.divider()
         
         st.markdown("### 📅 PROGRAMADO PRODUÇÃO")
+        # Novo Filtro de Semana solicitado
+        semanas_prog = sorted(df_atual[df_atual['STATUS'] == 'PROGRAMADO']['SEMANA OBRA'].unique())
+        sem_sel_p = st.selectbox("Filtrar Programação por Semana:", ["TODAS"] + semanas_prog)
+        
         df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
+        if sem_sel_p != "TODAS":
+            df_p = df_p[df_p['SEMANA OBRA'] == sem_sel_p]
+            
         cols_p = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
         st.dataframe(df_p[cols_p], use_container_width=True, hide_index=True, column_config=cfg_rel)
         
-        # Gerar Excel Formatado
-        excel_p = exportar_excel_com_cabecalho(df_p[cols_p], f"RELATÓRIO DE PROGRAMAÇÃO - {disc}")
-        st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", excel_p, f"Programado_{disc}.xlsx", use_container_width=True)
+        # Gerar Excel Formatado (Auto-ajustável)
+        excel_p = exportar_excel_com_cabecalho(df_p[cols_p], f"RELATÓRIO DE PROGRAMAÇÃO - SEMANA {sem_sel_p} - {disc}")
+        st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", excel_p, f"Programado_{sem_sel_p}_{disc}.xlsx", use_container_width=True)
         
         st.divider()
         
@@ -318,7 +331,7 @@ if not df_atual.empty:
         cfg_pend_br = {**cfg_rel, "PREVISTO": st.column_config.DateColumn("PREVISTO", format="DD/MM/YYYY")}
         st.dataframe(df_pend[cols_pend], use_container_width=True, hide_index=True, column_config=cfg_pend_br)
         
-        # Gerar Excel Formatado
+        # Gerar Excel Formatado (Auto-ajustável)
         excel_pend = exportar_excel_com_cabecalho(df_pend[cols_pend], f"LISTA DE PENDÊNCIAS - {disc}")
         st.download_button("📥 EXPORTAR PENDÊNCIAS", excel_pend, f"Pendencias_{disc}.xlsx", use_container_width=True)
         
@@ -326,12 +339,12 @@ if not df_atual.empty:
         
         st.markdown("### 📈 AVANÇO POR SEMANA (REALIZADO)")
         semanas_disponiveis = sorted(df_atual['SEMANA OBRA'].unique(), reverse=True)
-        semana_sel = st.selectbox("Selecione a Semana:", semanas_disponiveis if len(semanas_disponiveis) > 0 else ["-"])
+        semana_sel = st.selectbox("Selecione a Semana de Montagem:", semanas_disponiveis if len(semanas_disponiveis) > 0 else ["-"])
         df_semana = df_atual[(df_atual['SEMANA OBRA'] == semana_sel) & (df_atual['STATUS'] == 'MONTADO')]
         cols_av = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
         st.dataframe(df_semana[cols_av], use_container_width=True, hide_index=True, column_config={**cfg_rel, "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY")})
         
-        # Gerar Excel Formatado
+        # Gerar Excel Formatado (Auto-ajustável)
         excel_semana = exportar_excel_com_cabecalho(df_semana[cols_av], f"RELATÓRIO DE AVANÇO - SEMANA {semana_sel} - {disc}")
         st.download_button(f"📥 EXPORTAR SEMANA {semana_sel}", excel_semana, f"Avanco_Semana_{semana_sel}_{disc}.xlsx", use_container_width=True)
 
