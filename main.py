@@ -7,6 +7,7 @@ import json
 import plotly.graph_objects as go
 from io import BytesIO
 from datetime import datetime, timedelta
+import time # Importado para controlar o tempo de exibição da mensagem
 
 # --- CONFIGURAÇÃO E DATA BASE DA OBRA ---
 st.set_page_config(page_title="SISTEMA G-MONT", layout="wide")
@@ -146,7 +147,6 @@ if st.sidebar.button("🚪 SAIR", use_container_width=True):
     st.session_state['disciplina_ativa'] = None
     st.rerun()
 
-# Mapeamento para garantir que ws_atual seja sempre re-validado
 map_planilhas = {"ELÉTRICA": "BD_ELE", "INSTRUMENTAÇÃO": "BD_INST", "ESTRUTURA": "BD_ESTR"}
 
 if disc == "ELÉTRICA": df_atual, ws_atual = df_ele, ws_ele
@@ -187,7 +187,6 @@ if not df_atual.empty:
             v_obs = st.text_input("Observações:", value=dados_tag['OBS'])
             
             if st.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
-                # Re-conectar para evitar AttributeError de objeto em cache
                 ws_escrita = client.open(map_planilhas[disc]).get_worksheet(0)
                 f_prev = v_prev.strftime("%d/%m/%Y") if v_prev else ""
                 f_ini = v_ini.strftime("%d/%m/%Y") if v_ini else ""
@@ -199,7 +198,9 @@ if not df_atual.empty:
                     if col in cols_map: valores_linha[cols_map[col]-1] = str(val)
                 ws_escrita.update(f"A{idx_base + 2}", [valores_linha])
                 st.cache_data.clear()
-                st.success("Salvo com sucesso!"); st.rerun()
+                st.success("Salvo com sucesso!")
+                time.sleep(2) # Pausa para ver a mensagem
+                st.rerun()
 
         st.divider()
         col_cad, col_del = st.columns(2)
@@ -215,12 +216,13 @@ if not df_atual.empty:
                     n_des = st.text_input("DESENHO (DOC)")
                     if st.form_submit_button("🚀 CADASTRAR NO BANCO"):
                         if n_tag:
-                            # Re-conectar para garantir que ws_escrita existe
                             ws_escrita = client.open(map_planilhas[disc]).get_worksheet(0)
                             nova_linha = [n_tag, "", "", "", "", "", "AGUARDANDO PROG", n_disc, n_desc, n_area, n_des, n_fam, "", n_uni, "", "", ""]
                             ws_escrita.append_row(nova_linha)
                             st.cache_data.clear()
-                            st.success(f"TAG {n_tag} cadastrado!"); st.rerun()
+                            st.success(f"✅ TAG {n_tag} cadastrado com sucesso!")
+                            time.sleep(2) # CORREÇÃO: Pausa para o usuário ver o sucesso
+                            st.rerun()
                         else: st.error("O campo TAG é obrigatório.")
         with col_del:
             with st.expander("🗑️ DELETAR TAG DO BANCO", expanded=False):
@@ -236,7 +238,9 @@ if not df_atual.empty:
                             if cell: 
                                 ws_escrita.delete_rows(cell.row)
                                 st.cache_data.clear()
-                                st.success("Removido!"); st.rerun()
+                                st.success("Removido com sucesso!")
+                                time.sleep(2)
+                                st.rerun()
                     if c_btn_can.button("⚪ CANCELAR", use_container_width=True): st.rerun()
         st.divider()
         col_dates_cfg = {"TAG": st.column_config.TextColumn("TAG"), "PREVISTO": st.column_config.DateColumn(format="DD/MM/YYYY"), "DATA INIC PROG": st.column_config.DateColumn(format="DD/MM/YYYY"), "DATA FIM PROG": st.column_config.DateColumn(format="DD/MM/YYYY"), "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY")}
@@ -318,7 +322,6 @@ if not df_atual.empty:
                     try:
                         df_up = pd.read_excel(up).astype(str)
                         df_up.columns = [str(c).strip().upper() for c in df_up.columns]
-                        # Re-conectar para importar
                         ws_escrita = client.open(map_planilhas[disc]).get_worksheet(0)
                         lista_mestra = ws_escrita.get_all_values()
                         headers = [str(h).strip().upper() for h in lista_mestra[0]]
@@ -341,7 +344,7 @@ if not df_atual.empty:
                             ws_escrita.update('A1', lista_mestra)
                             st.cache_data.clear()
                             st.success(f"✅ IMPORTAÇÃO CONCLUÍDA!"); st.write(f"📊 **Resultado:** {sucesso} TAGs atualizadas.")
-                            if nao_encontrado > 0: st.warning(f"⚠️ {nao_encontrado} TAGS do Excel não existem.")
+                            time.sleep(2)
                         else: st.error("❌ Nenhuma TAG correspondente encontrada.")
                     except Exception as e: st.error(f"❌ Erro no processamento: {e}")
         with c3:
