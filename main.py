@@ -411,5 +411,20 @@ if not df_atual.empty:
 
         with c3:
             st.info("💾 BASE COMPLETA")
-            b_f = BytesIO(); df_atual.to_excel(b_f, index=False)
-            st.download_button("📥 EXPORTAR BASE", b_f.getvalue(), f"Base_{disc}.xlsx", use_container_width=True)
+            # Criamos uma cópia para não afetar o dataframe usado no sistema
+            df_export = df_atual.copy()
+            
+            # Colunas que precisam de formatação de data
+            colunas_data = ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT']
+            
+            for col in colunas_data:
+                if col in df_export.columns:
+                    # Converte para datetime e depois para string formatada
+                    # errors='coerce' garante que campos vazios continuem vazios
+                    temp_dt = pd.to_datetime(df_export[col], dayfirst=True, errors='coerce')
+                    df_export[col] = temp_dt.dt.strftime('%d/%m/%Y').replace('NaT', '')
+
+            b_f = BytesIO()
+            # Usamos o exportar_excel_com_cabecalho para manter o padrão visual e ajuste de colunas
+            excel_base = exportar_excel_com_cabecalho(df_export, f"BASE DE DADOS COMPLETA - {disc}")
+            st.download_button("📥 EXPORTAR BASE", excel_base, f"Base_{disc}.xlsx", use_container_width=True)
