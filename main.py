@@ -337,7 +337,9 @@ if not df_atual.empty:
         
         st.divider()
         
-       st.markdown("### 📈 AVANÇO POR SEMANA (REALIZADO)")
+       st.divider()
+        
+        st.markdown("### 📈 AVANÇO POR SEMANA (REALIZADO)")
         semanas_disponiveis = sorted(df_atual['SEMANA OBRA'].unique(), reverse=True)
         semana_sel = st.selectbox("Selecione a Semana de Montagem:", semanas_disponiveis if len(semanas_disponiveis) > 0 else ["-"])
         
@@ -347,12 +349,14 @@ if not df_atual.empty:
         
         st.dataframe(df_semana[cols_av], use_container_width=True, hide_index=True, column_config={**cfg_rel, "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY")})
         
-        # CORREÇÃO AQUI: Só gera o Excel se o dataframe NÃO estiver vazio
+        # Só gera o Excel se houver dados, evitando o ValueError do xlsxwriter
         if not df_semana.empty:
             excel_semana = exportar_excel_com_cabecalho(df_semana[cols_av], f"RELATÓRIO DE AVANÇO - SEMANA {semana_sel} - {disc}")
             st.download_button(f"📥 EXPORTAR SEMANA {semana_sel}", excel_semana, f"Avanco_Semana_{semana_sel}_{disc}.xlsx", use_container_width=True)
         else:
-            st.warning(f"Não há dados de montagem para a semana {semana_sel}.")
+            st.warning(f"Nenhum item montado na semana {semana_sel}.")
+
+# --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
 
     # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
