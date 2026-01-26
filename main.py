@@ -12,7 +12,35 @@ from datetime import datetime, timedelta
 st.set_page_config(page_title="SISTEMA G-MONT", layout="wide")
 DATA_INICIO_OBRA = datetime(2025, 9, 29) 
 
-# --- CONTROLE DE ACESSO E DISCIPLINAS (ALTERAÇÃO SOLICITADA) ---
+# --- FUNÇÃO PARA GERAR EXCEL COM CABEÇALHO (NOVA MODIFICAÇÃO) ---
+def exportar_excel_com_cabecalho(df, titulo_relatorio):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        # O dataframe começa na linha 6 (index 5)
+        df.to_excel(writer, index=False, sheet_name='Relatorio', startrow=5)
+        
+        workbook  = writer.book
+        worksheet = writer.sheets['Relatorio']
+        
+        # Formatos
+        fmt_titulo = workbook.add_format({'bold': True, 'font_size': 14, 'align': 'center', 'valign': 'vcenter'})
+        fmt_sub = workbook.add_format({'font_size': 10, 'italic': True})
+        
+        # 1. Tentar Inserir Logo
+        try:
+            worksheet.insert_image('A1', 'LOGO2.png', {'x_scale': 0.4, 'y_scale': 0.4})
+        except:
+            pass
+            
+        # 2. Título Centralizado
+        worksheet.merge_range('C2:F3', titulo_relatorio.upper(), fmt_titulo)
+        
+        # 3. Data de Emissão
+        worksheet.write('A5', f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", fmt_sub)
+        
+    return output.getvalue()
+
+# --- CONTROLE DE ACESSO E DISCIPLINAS ---
 if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'disciplina_ativa' not in st.session_state: st.session_state['disciplina_ativa'] = None
 
@@ -52,7 +80,7 @@ def tela_login():
             else: st.error("PIN Incorreto.")
     st.stop()
 
-# --- TELA DE SELEÇÃO DE DISCIPLINAS (NOVA ENTRADA) ---
+# --- TELA DE SELEÇÃO DE DISCIPLINAS ---
 def tela_selecao_disciplina():
     st.markdown("<h1 style='text-align: center;'>BEM-VINDO AO G-MONT</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center;'>Escolha a Disciplina para iniciar:</h3>", unsafe_allow_html=True)
@@ -127,7 +155,6 @@ try:
 except:
     st.sidebar.markdown("### G-MONT")
 
-# Usa a disciplina escolhida na tela inicial
 disc = st.session_state['disciplina_ativa']
 
 st.sidebar.subheader("MENU G-MONT")
@@ -266,39 +293,49 @@ if not df_atual.empty:
         fig.update_layout(template="plotly_dark", barmode='group', height=500, legend=dict(orientation="h", y=1.02))
         st.plotly_chart(fig, use_container_width=True)
 
-    # --- ABA 3: RELATÓRIOS ---
+    # --- ABA 3: RELATÓRIOS (ALTERAÇÃO SOLICITADA: CABEÇALHOS NO EXCEL) ---
     elif aba == "📋 RELATÓRIOS":
         st.subheader(f"📋 Painel de Relatórios - {disc}")
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total", len(df_atual)); m2.metric("Montados ✅", len(df_atual[df_atual['STATUS']=='MONTADO']))
         m3.metric("Programados 📅", len(df_atual[df_atual['STATUS']=='PROGRAMADO'])); m4.metric("Aguardando ⏳", len(df_atual[df_atual['STATUS']=='AGUARDANDO PROG']))
         st.divider()
+        
         st.markdown("### 📅 PROGRAMADO PRODUÇÃO")
         df_p = df_atual[df_atual['STATUS'] == 'PROGRAMADO']
         cols_p = ['TAG', 'SEMANA OBRA', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO']
         st.dataframe(df_p[cols_p], use_container_width=True, hide_index=True, column_config=cfg_rel)
-        buf_p = BytesIO(); df_p[cols_p].to_excel(buf_p, index=False)
-        st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", buf_p.getvalue(), f"Programado_{disc}.xlsx")
+        
+        # Gerar Excel Formatado
+        excel_p = exportar_excel_com_cabecalho(df_p[cols_p], f"RELATÓRIO DE PROGRAMAÇÃO - {disc}")
+        st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", excel_p, f"Programado_{disc}.xlsx", use_container_width=True)
+        
         st.divider()
+        
         st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
         df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
         cols_pend = ['TAG', 'DESCRIÇÃO', 'ÁREA', 'STATUS', 'PREVISTO', 'OBS']
         cfg_pend_br = {**cfg_rel, "PREVISTO": st.column_config.DateColumn("PREVISTO", format="DD/MM/YYYY")}
         st.dataframe(df_pend[cols_pend], use_container_width=True, hide_index=True, column_config=cfg_pend_br)
-        buf_pe = BytesIO(); df_pend[cols_pend].to_excel(buf_pe, index=False)
-        st.download_button("📥 EXPORTAR PENDÊNCIAS", buf_pe.getvalue(), f"Pendencias_{disc}.xlsx")
+        
+        # Gerar Excel Formatado
+        excel_pend = exportar_excel_com_cabecalho(df_pend[cols_pend], f"LISTA DE PENDÊNCIAS - {disc}")
+        st.download_button("📥 EXPORTAR PENDÊNCIAS", excel_pend, f"Pendencias_{disc}.xlsx", use_container_width=True)
+        
         st.divider()
+        
         st.markdown("### 📈 AVANÇO POR SEMANA (REALIZADO)")
         semanas_disponiveis = sorted(df_atual['SEMANA OBRA'].unique(), reverse=True)
         semana_sel = st.selectbox("Selecione a Semana:", semanas_disponiveis if len(semanas_disponiveis) > 0 else ["-"])
         df_semana = df_atual[(df_atual['SEMANA OBRA'] == semana_sel) & (df_atual['STATUS'] == 'MONTADO')]
         cols_av = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
         st.dataframe(df_semana[cols_av], use_container_width=True, hide_index=True, column_config={**cfg_rel, "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY")})
-        buf_r = BytesIO(); df_semana[cols_av].to_excel(buf_r, index=False)
-        st.download_button(f"📥 EXPORTAR SEMANA {semana_sel}", buf_r.getvalue(), f"Avanco_Semana_{semana_sel}_{disc}.xlsx")
+        
+        # Gerar Excel Formatado
+        excel_semana = exportar_excel_com_cabecalho(df_semana[cols_av], f"RELATÓRIO DE AVANÇO - SEMANA {semana_sel} - {disc}")
+        st.download_button(f"📥 EXPORTAR SEMANA {semana_sel}", excel_semana, f"Avanco_Semana_{semana_sel}_{disc}.xlsx", use_container_width=True)
 
     # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÕES ---
-   # --- ABA 4: EXPORTAÇÃO E IMPORTAÇÃO (CORRIGIDA) ---
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
         st.subheader(f"📤 Exportação e Importação - {disc}")
         c1, c2, c3 = st.columns(3)
