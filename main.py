@@ -251,42 +251,31 @@ if not df_atual.empty:
                             st.success(f"TAG {n_tag} cadastrado!"); st.rerun()
                         else: st.error("O campo TAG é obrigatório.")
                             
-       with col_del:
+      with col_del:
             with st.expander("🗑️ DELETAR TAG DO BANCO", expanded=False):
-                # Geramos uma lista limpa para evitar que o seletor busque algo que já sumiu
-                opcoes_del = [""] + sorted(df_atual['TAG'].unique().tolist())
-                tag_para_deletar = st.selectbox("Selecione a TAG para DELETAR:", opcoes_del, key="selectbox_delecao")
+                # Usamos uma key única para evitar conflitos no estado do Streamlit
+                tag_para_deletar = st.selectbox("Selecione a TAG para DELETAR:", [""] + sorted(df_atual['TAG'].unique().tolist()), key="del_selectbox")
                 
                 if tag_para_deletar:
-                    st.warning(f"🚨 ATENÇÃO: {tag_para_deletar}")
-                    confirm_del = st.checkbox("Confirmar exclusão definitiva", key="check_confirm_del")
+                    st.warning(f"🚨 ATENÇÃO: Deseja apagar a TAG {tag_para_deletar}?")
+                    confirm_del = st.checkbox("Eu confirmo que desejo apagar este registro", key="confirm_delete_check")
                     
                     c_btn_del, c_btn_can = st.columns(2)
                     
                     if c_btn_del.button("🔴 CONFIRMAR EXCLUSÃO", use_container_width=True):
                         if confirm_del:
                             try:
-                                # 1. Encontrar e Deletar no Sheets
                                 cell = ws_atual.find(tag_para_deletar, in_column=1)
                                 if cell:
                                     ws_atual.delete_rows(cell.row)
-                                    
-                                    # 2. LIMPEZA CRÍTICA: Limpa cache e reinicia variáveis de seleção
+                                    st.success("Removido com sucesso!")
+                                    # Limpa o cache para que o sistema perceba que a linha sumiu do Google Sheets
                                     st.cache_resource.clear()
-                                    if "selectbox_delecao" in st.session_state:
-                                        del st.session_state["selectbox_delecao"]
-                                    if "check_confirm_del" in st.session_state:
-                                        del st.session_state["check_confirm_del"]
-                                    
-                                    st.success(f"TAG {tag_para_deletar} removida!")
-                                    st.rerun()
-                                else:
-                                    st.error("TAG não encontrada no banco (já pode ter sido removida).")
                                     st.rerun()
                             except Exception as e:
-                                st.error(f"Erro na conexão com o banco: {e}")
+                                st.error(f"Erro ao deletar no banco: {e}")
                         else:
-                            st.error("Marque a caixa de confirmação.")
+                            st.error("Você precisa marcar a caixa de confirmação.")
 
                     if c_btn_can.button("⚪ CANCELAR", use_container_width=True):
                         st.rerun()
