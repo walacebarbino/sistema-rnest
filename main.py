@@ -33,10 +33,11 @@ def exportar_excel_com_cabecalho(df, titulo_relatorio):
             worksheet.set_column(i, i, column_len)
     return output.getvalue()
 
-# --- CONTROLE DE SESSÃO ---
+# --- CONTROLE DE ACESSO E DISCIPLINAS ---
+if 'logado' not in st.session_state: st.session_state['logado'] = False
 if 'disciplina_ativa' not in st.session_state: st.session_state['disciplina_ativa'] = None
 
-# --- CSS PERSONALIZADO ---
+# --- CSS PARA LOGO NA SIDEBAR ---
 st.markdown("""
     <style>
     [data-testid="stSidebar"] [data-testid="stImage"] { padding: 0px !important; margin-top: -60px !important; margin-left: -20px !important; margin-right: -20px !important; width: calc(100% + 40px) !important; }
@@ -46,6 +47,21 @@ st.markdown("""
     label p { font-weight: bold !important; font-size: 14px !important; }
     </style>
     """, unsafe_allow_html=True)
+
+def tela_login():
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        try: st.image("LOGO2.png", width=120)
+        except: pass
+        st.subheader("🔐 LOGIN G-MONT")
+        pin = st.text_input("Digite o PIN:", type="password", max_chars=4)
+        if st.button("ENTRAR NO SISTEMA", use_container_width=True):
+            if pin == "1234":
+                st.session_state['logado'] = True
+                st.rerun()
+            else: st.error("PIN Incorreto.")
+    st.stop()
 
 def tela_selecao_disciplina():
     st.markdown("<h1 style='text-align: center;'>BEM-VINDO AO G-MONT</h1>", unsafe_allow_html=True)
@@ -63,7 +79,7 @@ def tela_selecao_disciplina():
         st.rerun()
     st.stop()
 
-# Inicia direto na seleção de disciplina (Acesso controlado por e-mail no Streamlit Cloud)
+if not st.session_state['logado']: tela_login()
 if not st.session_state['disciplina_ativa']: tela_selecao_disciplina()
 
 # --- CONEXÃO GOOGLE SHEETS ---
@@ -126,7 +142,8 @@ if st.sidebar.button("🔄 TROCAR DISCIPLINA"):
 
 aba = st.sidebar.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 EXPORTAÇÃO E IMPORTAÇÕES"])
 st.sidebar.divider()
-if st.sidebar.button("🚪 SAIR DO SISTEMA", use_container_width=True):
+if st.sidebar.button("🚪 SAIR", use_container_width=True):
+    st.session_state['logado'] = False
     st.session_state['disciplina_ativa'] = None
     st.rerun()
 
@@ -182,7 +199,7 @@ if not df_atual.empty:
                 ws_escrita.update(f"A{idx_base + 2}", [valores_linha])
                 st.cache_data.clear()
                 st.success("Salvo com sucesso!")
-                time.sleep(2) 
+                time.sleep(2) # Pausa para ver a mensagem
                 st.rerun()
 
         st.divider()
@@ -204,7 +221,7 @@ if not df_atual.empty:
                             ws_escrita.append_row(nova_linha)
                             st.cache_data.clear()
                             st.success(f"✅ TAG {n_tag} cadastrado com sucesso!")
-                            time.sleep(2) 
+                            time.sleep(2) # CORREÇÃO: Pausa para o usuário ver o sucesso
                             st.rerun()
                         else: st.error("O campo TAG é obrigatório.")
         with col_del:
@@ -230,7 +247,6 @@ if not df_atual.empty:
         st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], use_container_width=True, hide_index=True, column_config={**cfg_rel, **col_dates_cfg})
 
     elif aba == "📊 CURVA S":
-        # Lógica de Curva S idêntica à fornecida...
         st.subheader(f"📊 Curva S e Avanço - {disc}")
         total_t = len(df_atual)
         montados = len(df_atual[df_atual['STATUS'] == 'MONTADO'])
@@ -257,7 +273,6 @@ if not df_atual.empty:
         st.plotly_chart(fig, use_container_width=True)
 
     elif aba == "📋 RELATÓRIOS":
-        # Painel de Relatórios idêntico ao fornecido...
         st.subheader(f"📋 Painel de Relatórios - {disc}")
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total", len(df_atual)); m2.metric("Montados ✅", len(df_atual[df_atual['STATUS']=='MONTADO']))
@@ -272,10 +287,26 @@ if not df_atual.empty:
         st.dataframe(df_p[cols_p], use_container_width=True, hide_index=True, column_config=cfg_rel)
         excel_p = exportar_excel_com_cabecalho(df_p[cols_p], f"RELATÓRIO DE PROGRAMAÇÃO - SEMANA {sem_sel_p} - {disc}")
         st.download_button("📥 EXPORTAR PROGRAMADO PRODUÇÃO", excel_p, f"Programado_{sem_sel_p}_{disc}.xlsx", use_container_width=True)
-        # (Outros relatórios seguem aqui conforme seu código original...)
+        st.divider()
+        st.markdown("### 🚩 LISTA DE PENDÊNCIAS TOTAIS")
+        df_pend = df_atual[df_atual['STATUS'] != 'MONTADO']
+        cols_pend = ['TAG', 'DESCRIÇÃO', 'ÁREA', 'STATUS', 'PREVISTO', 'OBS']
+        st.dataframe(df_pend[cols_pend], use_container_width=True, hide_index=True, column_config={**cfg_rel, "PREVISTO": st.column_config.DateColumn("PREVISTO", format="DD/MM/YYYY")})
+        excel_pend = exportar_excel_com_cabecalho(df_pend[cols_pend], f"LISTA DE PENDÊNCIAS - {disc}")
+        st.download_button("📥 EXPORTAR PENDÊNCIAS", excel_pend, f"Pendencias_{disc}.xlsx", use_container_width=True)
+        st.divider()
+        st.markdown("### 📈 AVANÇO POR SEMANA (REALIZADO)")
+        semanas_disponiveis = sorted(df_atual['SEMANA OBRA'].unique(), reverse=True)
+        semana_sel = st.selectbox("Selecione a Semana de Montagem:", semanas_disponiveis if len(semanas_disponiveis) > 0 else ["-"])
+        df_semana = df_atual[(df_atual['SEMANA OBRA'] == semana_sel) & (df_atual['STATUS'] == 'MONTADO')]
+        cols_av = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'ÁREA', 'STATUS', 'OBS']
+        st.dataframe(df_semana[cols_av], use_container_width=True, hide_index=True, column_config={**cfg_rel, "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY")})
+        if not df_semana.empty:
+            excel_semana = exportar_excel_com_cabecalho(df_semana[cols_av], f"RELATÓRIO DE AVANÇO - SEMANA {semana_sel} - {disc}")
+            st.download_button(f"📥 EXPORTAR SEMANA {semana_sel}", excel_semana, f"Avanco_Semana_{semana_sel}_{disc}.xlsx", use_container_width=True)
+        else: st.warning(f"Nenhum item montado na semana {semana_sel} para exportar.")
 
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
-        # Funcionalidade de Importação idêntica à fornecida...
         st.subheader(f"📤 Exportação e Importação - {disc}")
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -314,7 +345,6 @@ if not df_atual.empty:
                             st.cache_data.clear()
                             st.success(f"✅ IMPORTAÇÃO CONCLUÍDA!"); st.write(f"📊 **Resultado:** {sucesso} TAGs atualizadas.")
                             time.sleep(2)
-                            st.rerun()
                         else: st.error("❌ Nenhuma TAG correspondente encontrada.")
                     except Exception as e: st.error(f"❌ Erro no processamento: {e}")
         with c3:
