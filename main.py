@@ -58,7 +58,7 @@ def tela_login():
         # O Streamlit Cloud já validou o e-mail; aqui pedimos o PIN de segurança
         pin = st.text_input("Digite o PIN:", type="password", max_chars=4)
         if st.button("ENTRAR NO SISTEMA", use_container_width=True):
-            if pin == "1234": # Ajuste o PIN se desejar
+            if pin == "2026": # Ajuste o PIN se desejar
                 st.session_state['logado'] = True
                 st.rerun()
             else: st.error("PIN Incorreto.")
