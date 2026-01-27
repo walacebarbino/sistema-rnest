@@ -57,7 +57,7 @@ def tela_login():
         st.subheader("🔐 LOGIN G-MONT")
         pin = st.text_input("Digite o PIN:", type="password", max_chars=4)
         if st.button("ENTRAR NO SISTEMA", use_container_width=True):
-            if pin == "1234":
+            if pin == "2026":
                 st.session_state['logado'] = True
                 st.rerun()
             else: st.error("PIN Incorreto.")
