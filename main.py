@@ -55,13 +55,18 @@ def tela_login():
         try: st.image("LOGO2.png", width=120)
         except: pass
         st.subheader("🔐 LOGIN G-MONT")
+        # O Streamlit Cloud já validou o e-mail; aqui pedimos o PIN de segurança
         pin = st.text_input("Digite o PIN:", type="password", max_chars=4)
         if st.button("ENTRAR NO SISTEMA", use_container_width=True):
-            if pin == "2026":
+            if pin == "1234": # Ajuste o PIN se desejar
                 st.session_state['logado'] = True
                 st.rerun()
             else: st.error("PIN Incorreto.")
     st.stop()
+
+# --- VERIFICAÇÃO DE LOGIN ---
+if not st.session_state['logado']:
+    tela_login()
 
 def tela_selecao_disciplina():
     st.markdown("<h1 style='text-align: center;'>BEM-VINDO AO G-MONT</h1>", unsafe_allow_html=True)
@@ -141,10 +146,9 @@ if st.sidebar.button("🔄 TROCAR DISCIPLINA"):
     st.rerun()
 
 aba = st.sidebar.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 EXPORTAÇÃO E IMPORTAÇÕES"])
-st.sidebar.divider()
 if st.sidebar.button("🚪 SAIR", use_container_width=True):
-    st.session_state['logado'] = False
-    st.session_state['disciplina_ativa'] = None
+    st.session_state['logado'] = False  # Volta para a tela de PIN
+    st.session_state['disciplina_ativa'] = None # Reseta a escolha da disciplina
     st.rerun()
 
 map_planilhas = {"ELÉTRICA": "BD_ELE", "INSTRUMENTAÇÃO": "BD_INST", "ESTRUTURA": "BD_ESTR"}
