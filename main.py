@@ -251,30 +251,99 @@ if not df_atual.empty:
         st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], use_container_width=True, hide_index=True, column_config={**cfg_rel, **col_dates_cfg})
 
     elif aba == "📊 CURVA S":
-        st.subheader(f"📊 Curva S e Avanço - {disc}")
+        st.subheader(f"📊 Curva S Semanal e Avanço - {disc}")
+        
+        # 1. Indicadores de Topo
         total_t = len(df_atual)
         montados = len(df_atual[df_atual['STATUS'] == 'MONTADO'])
         per_real = (montados / total_t * 100) if total_t > 0 else 0
+        
         c1, c2 = st.columns(2)
         c1.metric("Avanço Total Realizado", f"{per_real:.2f}%")
         c2.write("Progresso Visual:")
         c2.progress(per_real / 100)
+
+        # 2. Preparação dos Dados (Semanas)
         df_c = df_atual.copy()
+        
+        # Converter Semana Obra (Programado) para numérico
+        df_c['SEM_PROG'] = pd.to_numeric(df_c['SEMANA OBRA'], errors='coerce').fillna(0).astype(int)
+        
+        # Datas para Previsto e Realizado
         df_c['DT_REAL'] = pd.to_datetime(df_c['DATA MONT'], dayfirst=True, errors='coerce')
         df_c['DT_PREV'] = pd.to_datetime(df_c['PREVISTO'], dayfirst=True, errors='coerce')
-        prev_mes = df_c['DT_PREV'].dt.to_period('M').value_counts().sort_index()
-        real_mes = df_c['DT_REAL'].dt.to_period('M').value_counts().sort_index()
-        todos_meses = sorted(list(set(prev_mes.index.tolist() + real_mes.index.tolist())))
-        x_eixo = [str(m) for m in todos_meses]
-        prev_acum = prev_mes.reindex(todos_meses, fill_value=0).cumsum()
-        real_acum = real_mes.reindex(todos_meses, fill_value=0).cumsum()
-        fig = go.Figure()
-        fig.add_trace(go.Bar(x=x_eixo, y=prev_mes.reindex(todos_meses, fill_value=0), name='LB - Previsto Mensal', marker_color='#2ecc71', opacity=0.6))
-        fig.add_trace(go.Bar(x=x_eixo, y=real_mes.reindex(todos_meses, fill_value=0), name='Realizado Mensal', marker_color='#3498db', opacity=0.6))
-        fig.add_trace(go.Scatter(x=x_eixo, y=prev_acum, name='LB - Prev. Acumulado', line=dict(color='#27ae60', width=4)))
-        fig.add_trace(go.Scatter(x=x_eixo, y=real_acum, name='Real. Acumulado', line=dict(color='#e74c3c', width=4)))
-        fig.update_layout(template="plotly_dark", barmode='group', height=500, legend=dict(orientation="h", y=1.02))
-        st.plotly_chart(fig, use_container_width=True)
+
+        # Função para converter data em número de semana da obra
+        def converter_para_semana(data):
+            if pd.isnull(data): return None
+            # DATA_INICIO_OBRA deve estar definida no topo do seu código (29/09/2025)
+            dias = (data - DATA_INICIO_OBRA).days
+            return (dias // 7) + 1
+
+        df_c['SEM_PREV'] = df_c['DT_PREV'].apply(converter_para_semana)
+        df_c['SEM_REAL'] = df_c['DT_REAL'].apply(converter_para_semana)
+
+        # Criar o eixo X com todas as semanas necessárias
+        todas_semanas = sorted(list(set(
+            df_c['SEM_PREV'].dropna().astype(int).tolist() + 
+            df_c['SEM_PROG'][df_c['SEM_PROG'] > 0].tolist() + 
+            df_c['SEM_REAL'].dropna().astype(int).tolist()
+        )))
+        
+        if not todas_semanas:
+            st.warning("Aguardando dados de cronograma para gerar o gráfico.")
+        else:
+            eixo_x = list(range(1, int(max(todas_semanas)) + 1))
+            
+            # Contagens por semana
+            prev_sem = df_c['SEM_PREV'].value_counts().reindex(eixo_x, fill_value=0)
+            prog_sem = df_c['SEM_PROG'].value_counts().reindex(eixo_x, fill_value=0)
+            real_sem = df_c['SEM_REAL'].value_counts().reindex(eixo_x, fill_value=0)
+
+            # Acumulados
+            prev_acum = prev_sem.cumsum()
+            prog_acum = prog_sem.cumsum()
+            real_acum = real_sem.cumsum()
+
+            # 3. Gráfico Plotly
+            fig = go.Figure()
+
+            # Barras Mensais (opcional, mantive para dar volume ao gráfico)
+            fig.add_trace(go.Bar(x=eixo_x, y=prev_sem, name='Previsto Semanal', marker_color='#2ecc71', opacity=0.3))
+            fig.add_trace(go.Bar(x=eixo_x, y=real_sem, name='Realizado Semanal', marker_color='#3498db', opacity=0.3))
+
+            # Linha PREVISTO (Linha de Base)
+            fig.add_trace(go.Scatter(x=eixo_x, y=prev_acum, name='LB - Previsto Acumulado', 
+                                     line=dict(color='#27ae60', width=2, dash='dot')))
+
+            # Linha PROGRAMADO (A nova linha que você pediu)
+            fig.add_trace(go.Scatter(x=eixo_x, y=prog_acum, name='Programado Acumulado', 
+                                     line=dict(color='#f1c40f', width=3)))
+
+            # Linha REALIZADO
+            fig.add_trace(go.Scatter(x=eixo_x, y=real_acum, name='Realizado Acumulado', 
+                                     line=dict(color='#e74c3c', width=4)))
+
+            fig.update_layout(
+                template="plotly_dark", 
+                hovermode="x unified",
+                height=550, 
+                xaxis_title="Semanas de Obra",
+                yaxis_title="Quantidade de Tags",
+                legend=dict(orientation="h", y=1.05, xanchor="center", x=0.5)
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Tabela de Apoio para conferência rápida
+            with st.expander("Ver Quadro de Evolução Semanal"):
+                df_resumo = pd.DataFrame({
+                    "Semana": eixo_x,
+                    "Previsto": prev_acum.values,
+                    "Programado": prog_acum.values,
+                    "Realizado": real_acum.values
+                }).set_index("Semana")
+                st.dataframe(df_resumo.T, use_container_width=True)
 
     elif aba == "📋 RELATÓRIOS":
         st.subheader(f"📋 Painel de Relatórios - {disc}")
