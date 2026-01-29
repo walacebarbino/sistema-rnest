@@ -305,36 +305,41 @@ if not df_atual.empty:
             prog_acum = prog_sem.cumsum()
             real_acum = real_sem.cumsum()
 
-           # 3. Gráfico Plotly com Curvas Arredondadas (Spline)
-            fig = go.Figure()
+           # 3. Gráfico Plotly com Curvas Ultra Suaves (Spline + Smoothing)
+fig = go.Figure()
 
-            # Barras Semanais (Volume)
-            fig.add_trace(go.Bar(x=eixo_x, y=prev_sem, name='Previsto Semanal', marker_color='#2ecc71', opacity=0.2))
-            fig.add_trace(go.Bar(x=eixo_x, y=real_sem, name='Realizado Semanal', marker_color='#3498db', opacity=0.2))
+# Barras Semanais (Volume) - Reduzi a opacidade para não brigar com as linhas suaves
+fig.add_trace(go.Bar(x=eixo_x, y=prev_sem, name='Previsto Semanal', marker_color='#2ecc71', opacity=0.15))
+fig.add_trace(go.Bar(x=eixo_x, y=real_sem, name='Realizado Semanal', marker_color='#3498db', opacity=0.15))
 
-            # Linha PREVISTO (Verde Pontilhada)
-            fig.add_trace(go.Scatter(x=eixo_x, y=prev_acum, name='LB - Previsto Acumulado', 
-                                     line=dict(color='#27ae60', width=2, dash='dot', shape='spline')))
+# Linha PREVISTO (Verde Pontilhada)
+fig.add_trace(go.Scatter(x=eixo_x, y=prev_acum, name='LB - Previsto Acumulado', 
+                         line=dict(color='#27ae60', width=2, dash='dot', 
+                                   shape='spline', smoothing=1.3)))
 
-            # Linha PROGRAMADO (Amarela)
-            fig.add_trace(go.Scatter(x=eixo_x, y=prog_acum, name='Programado Acumulado', 
-                                     line=dict(color='#f1c40f', width=3, shape='spline')))
+# Linha PROGRAMADO (Amarela)
+fig.add_trace(go.Scatter(x=eixo_x, y=prog_acum, name='Programado Acumulado', 
+                         line=dict(color='#f1c40f', width=3, 
+                                   shape='spline', smoothing=1.3)))
 
-            # Linha REALIZADO (Azul e mais grossa para destaque)
-            fig.add_trace(go.Scatter(x=eixo_x, y=real_acum, name='Realizado Acumulado', 
-                                     line=dict(color='#3498db', width=4, shape='spline')))
+# Linha REALIZADO (Azul)
+fig.add_trace(go.Scatter(x=eixo_x, y=real_acum, name='Realizado Acumulado', 
+                         line=dict(color='#3498db', width=4, 
+                                   shape='spline', smoothing=1.3)))
 
-            fig.update_layout(
-                template="plotly_dark", 
-                hovermode="x unified",
-                height=550, 
-                xaxis_title="Semanas de Obra",
-                yaxis_title="Quantidade de Tags",
-                legend=dict(orientation="h", y=1.05, xanchor="center", x=0.5),
-                margin=dict(l=20, r=20, t=50, b=20) # Ajuste de margens para o gráfico respirar
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
+fig.update_layout(
+    template="plotly_dark", 
+    hovermode="x unified",
+    height=550, 
+    xaxis_title="Semanas de Obra",
+    yaxis_title="Quantidade de Tags",
+    legend=dict(orientation="h", y=1.05, xanchor="center", x=0.5),
+    margin=dict(l=20, r=20, t=50, b=20),
+    # Suaviza a transição do mouse sobre os dados
+    hoverlabel=dict(bgcolor="rgba(0,0,0,0.8)", font_size=13)
+)
+
+st.plotly_chart(fig, use_container_width=True)
             
             # Tabela de Apoio para conferência rápida
             with st.expander("Ver Quadro de Evolução Semanal"):
