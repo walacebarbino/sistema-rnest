@@ -246,23 +246,28 @@ if not df_atual.empty:
                                 time.sleep(2)
                                 st.rerun()
                     if c_btn_can.button("⚪ CANCELAR", use_container_width=True): st.rerun()
-        st.divider()
         
-       # Configuração das colunas
-        col_dates_cfg = {
-            "TAG": st.column_config.TextColumn("TAG"), 
-            "PREVISTO": st.column_config.TextColumn("PREVISTO"), 
-            "DATA INIC PROG": st.column_config.TextColumn("DATA INIC PROG"), 
-            "DATA FIM PROG": st.column_config.TextColumn("DATA FIM PROG"), 
-            "DATA MONT": st.column_config.TextColumn("DATA MONT")
-        }
+       st.divider()
+        
+        df_visualizacao = df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']].copy()
+        
+        colunas_data = ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT']
+        for col in colunas_data:
+            df_visualizacao[col] = pd.to_datetime(df_visualizacao[col], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y').fillna("")
 
-        # Voltamos ao dataframe mas garantimos que a busca e filtros internos funcionem
+        busca_input = st.text_input("🔍 Pesquisar no Quadro:", key="busca_quadro_principal")
+
+        if busca_input:
+            mask = df_visualizacao.apply(lambda row: row.astype(str).str.contains(busca_input, case=False).any(), axis=1)
+            df_visualizacao = df_visualizacao[mask]
+
+        config_estilo = {col: st.column_config.TextColumn(col) for col in df_visualizacao.columns}
+        
         st.dataframe(
-            df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], 
+            df_visualizacao, 
             use_container_width=True, 
             hide_index=True, 
-            column_config={**cfg_rel, **col_dates_cfg}
+            column_config=config_estilo
         )
 
     elif aba == "📊 CURVA S":
