@@ -246,36 +246,23 @@ if not df_atual.empty:
                                 time.sleep(2)
                                 st.rerun()
                     if c_btn_can.button("⚪ CANCELAR", use_container_width=True): st.rerun()
+        st.divider()
         
-   st.divider()
-        
-        # 1. Campo de busca
-        busca = st.text_input("🔍 Digite para buscar (TAG, Status ou Data):", placeholder="Ex: ATERRAMENTO ou 09/03")
+       # Configuração das colunas
+        col_dates_cfg = {
+            "TAG": st.column_config.TextColumn("TAG"), 
+            "PREVISTO": st.column_config.TextColumn("PREVISTO"), 
+            "DATA INIC PROG": st.column_config.TextColumn("DATA INIC PROG"), 
+            "DATA FIM PROG": st.column_config.TextColumn("DATA FIM PROG"), 
+            "DATA MONT": st.column_config.TextColumn("DATA MONT")
+        }
 
-        # 2. Preparação e Formatação RIGOROSA para DD/MM/AAAA
-        df_view = df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']].copy()
-        
-        cols_data = ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT']
-        
-        for col in cols_data:
-            # Converte para datetime primeiro para garantir o padrão
-            temp_dt = pd.to_datetime(df_view[col], dayfirst=True, errors='coerce')
-            # Converte para STRING no formato brasileiro e remove os "NaT" (vazios)
-            df_view[col] = temp_dt.dt.strftime('%d/%m/%Y').replace(['NaT', 'nan', None, 'None'], '')
-
-        # 3. Lógica de Filtro por Escrita
-        if busca:
-            # Procura o termo em todas as colunas
-            mask = df_view.apply(lambda row: row.astype(str).str.contains(busca, case=False).any(), axis=1)
-            df_view = df_view[mask]
-
-        # 4. Exibição da Tabela Final
+        # Voltamos ao dataframe mas garantimos que a busca e filtros internos funcionem
         st.dataframe(
-            df_view, 
+            df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], 
             use_container_width=True, 
-            hide_index=True,
-            # Forçamos a coluna como texto para o Streamlit não tentar reformatar para americano
-            column_config={col: st.column_config.TextColumn(col) for col in df_view.columns}
+            hide_index=True, 
+            column_config={**cfg_rel, **col_dates_cfg}
         )
 
     elif aba == "📊 CURVA S":
