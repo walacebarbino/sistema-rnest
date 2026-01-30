@@ -145,7 +145,7 @@ if st.sidebar.button("🔄 TROCAR DISCIPLINA"):
     st.session_state['disciplina_ativa'] = None
     st.rerun()
 
-aba = st.sidebar.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO E QUADRO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 EXPORTAÇÃO E IMPORTAÇÕES"])
+aba = st.sidebar.radio("NAVEGAÇÃO:", ["📝 EDIÇÃO/PROGRAMAÇÃO", "📊 CURVA S", "📋 RELATÓRIOS", "📤 EXPORTAÇÃO E IMPORTAÇÕES"])
 if st.sidebar.button("🚪 SAIR", use_container_width=True):
     st.session_state['logado'] = False  # Volta para a tela de PIN
     st.session_state['disciplina_ativa'] = None # Reseta a escolha da disciplina
@@ -168,7 +168,7 @@ if not df_atual.empty:
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
     cfg_rel = {"TAG": st.column_config.TextColumn(width="medium"), "DESCRIÇÃO": st.column_config.TextColumn(width="large"), "OBS": st.column_config.TextColumn(width="large"), "DOCUMENTO": st.column_config.TextColumn(width="medium")}
 
-    if aba == "📝 EDIÇÃO E QUADRO":
+    if aba == "📝 EDIÇÃO/PROGRAMAÇÃO":
         st.subheader(f"📝 Edição por TAG - {disc}")
         c_tag, c_sem = st.columns([2, 1])
         with c_tag: tag_sel = st.selectbox("Selecione para EDITAR:", sorted(df_atual['TAG'].unique()))
