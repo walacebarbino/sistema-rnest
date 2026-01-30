@@ -247,7 +247,7 @@ if not df_atual.empty:
                                 st.rerun()
                     if c_btn_can.button("⚪ CANCELAR", use_container_width=True): st.rerun()
         
-       st.divider()
+      st.divider()
         
         df_visualizacao = df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']].copy()
         
