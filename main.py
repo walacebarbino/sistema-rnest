@@ -247,36 +247,33 @@ if not df_atual.empty:
                                 st.rerun()
                     if c_btn_can.button("⚪ CANCELAR", use_container_width=True): st.rerun()
         
-     st.divider()
+    st.divider()
         
-        # 1. Preparação dos dados com Formato Brasil (DD/MM/AAAA)
+        # 1. Preparação dos dados (Garantindo formato Brasil nas datas)
         df_view = df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']].copy()
         
         cols_data = ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT']
         for col in cols_data:
-            # Converte para texto no padrão brasileiro para evitar inversão americana
+            # Força a conversão para texto DD/MM/AAAA para não inverter no padrão americano
             df_view[col] = pd.to_datetime(df_view[col], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y').fillna("")
 
-        # 2. Filtro Idêntico ao "Selecione para EDITAR" (Selectbox com pesquisa)
-        # Usamos uma lista vazia no início para mostrar tudo por padrão
-        filtro_tag = st.multiselect(
-            "🔍 Pesquisar TAG no Quadro (Filtro):", 
+        # 2. Filtro estilo "Selecione para EDITAR" (Multiselect com pesquisa)
+        tags_selecionadas = st.multiselect(
+            "🔍 Pesquisar e Filtrar TAGs no Quadro:", 
             options=sorted(df_view['TAG'].unique()),
-            placeholder="Digite aqui para buscar a TAG igual no campo de edição..."
+            placeholder="Digite o nome da TAG para filtrar..."
         )
 
-        # 3. Aplica o filtro na visualização
-        if filtro_tag:
-            df_view = df_view[df_view['TAG'].isin(filtro_tag)]
+        # 3. Aplicar o filtro se houver seleção
+        if tags_selecionadas:
+            df_view = df_view[df_view['TAG'].isin(tags_selecionadas)]
 
-        # 4. Exibição da Tabela (Corrigindo Indentação)
-        col_dates_cfg = {col: st.column_config.TextColumn(col) for col in df_view.columns}
-        
+        # 4. Exibição da Tabela
         st.dataframe(
             df_view, 
             use_container_width=True, 
-            hide_index=True, 
-            column_config=col_dates_cfg
+            hide_index=True,
+            column_config={col: st.column_config.TextColumn(col) for col in df_view.columns}
         )
 
     elif aba == "📊 CURVA S":
