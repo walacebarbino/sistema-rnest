@@ -246,23 +246,33 @@ if not df_atual.empty:
                                 time.sleep(2)
                                 st.rerun()
                     if c_btn_can.button("⚪ CANCELAR", use_container_width=True): st.rerun()
+        
         st.divider()
         
-       # Configuração das colunas
-        col_dates_cfg = {
-            "TAG": st.column_config.TextColumn("TAG"), 
-            "PREVISTO": st.column_config.TextColumn("PREVISTO"), 
-            "DATA INIC PROG": st.column_config.TextColumn("DATA INIC PROG"), 
-            "DATA FIM PROG": st.column_config.TextColumn("DATA FIM PROG"), 
-            "DATA MONT": st.column_config.TextColumn("DATA MONT")
-        }
+        # 1. Campo de busca por texto (Escrita)
+        busca = st.text_input("🔍 Digite para buscar (TAG, Status ou Data):", placeholder="Ex: ATERRAMENTO ou 09/03")
 
-        # Voltamos ao dataframe mas garantimos que a busca e filtros internos funcionem
+        # 2. Preparação e Formatação dos dados
+        df_view = df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']].copy()
+        
+        # Garante que as datas fiquem no formato Brasil para exibição
+        cols_data = ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT']
+        for col in cols_data:
+            df_view[col] = df_view[col].astype(str).replace(['None', 'nan', 'NaT'], '')
+
+        # 3. Lógica de Filtro por Escrita
+        if busca:
+            # Procura o termo em todas as colunas da tabela
+            mask = df_view.apply(lambda row: row.astype(str).str.contains(busca, case=False).any(), axis=1)
+            df_view = df_view[mask]
+
+        # 4. Exibição da Tabela
         st.dataframe(
-            df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], 
+            df_view, 
             use_container_width=True, 
-            hide_index=True, 
-            column_config={**cfg_rel, **col_dates_cfg}
+            hide_index=True,
+            # Forçamos as colunas como texto para manter o formato DD/MM/YYYY que vem da planilha
+            column_config={col: st.column_config.TextColumn(col) for col in df_view.columns}
         )
 
     elif aba == "📊 CURVA S":
