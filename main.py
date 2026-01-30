@@ -246,8 +246,8 @@ if not df_atual.empty:
                                 time.sleep(2)
                                 st.rerun()
                     if c_btn_can.button("⚪ CANCELAR", use_container_width=True): st.rerun()
-        
-      st.divider()
+                        
+                    st.divider()
         
         df_visualizacao = df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']].copy()
         
@@ -269,6 +269,7 @@ if not df_atual.empty:
             hide_index=True, 
             column_config=config_estilo
         )
+        
 
     elif aba == "📊 CURVA S":
         st.subheader(f"📊 Curva S Semanal e Avanço - {disc}")
