@@ -248,8 +248,22 @@ if not df_atual.empty:
                     if c_btn_can.button("⚪ CANCELAR", use_container_width=True): st.rerun()
         st.divider()
         
-        col_dates_cfg = {"TAG": st.column_config.TextColumn("TAG"), "PREVISTO": st.column_config.DateColumn(format="DD/MM/YYYY"), "DATA INIC PROG": st.column_config.DateColumn(format="DD/MM/YYYY"), "DATA FIM PROG": st.column_config.DateColumn(format="DD/MM/YYYY"), "DATA MONT": st.column_config.DateColumn(format="DD/MM/YYYY")}
-        st.dataframe(df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], use_container_width=True, hide_index=True, column_config={**cfg_rel, **col_dates_cfg})
+       # Configuração das colunas
+        col_dates_cfg = {
+            "TAG": st.column_config.TextColumn("TAG"), 
+            "PREVISTO": st.column_config.TextColumn("PREVISTO"), 
+            "DATA INIC PROG": st.column_config.TextColumn("DATA INIC PROG"), 
+            "DATA FIM PROG": st.column_config.TextColumn("DATA FIM PROG"), 
+            "DATA MONT": st.column_config.TextColumn("DATA MONT")
+        }
+
+        # Voltamos ao dataframe mas garantimos que a busca e filtros internos funcionem
+        st.dataframe(
+            df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']], 
+            use_container_width=True, 
+            hide_index=True, 
+            column_config={**cfg_rel, **col_dates_cfg}
+        )
 
     elif aba == "📊 CURVA S":
         st.subheader(f"📊 Curva S Semanal e Avanço - {disc}")
