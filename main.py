@@ -247,28 +247,26 @@ if not df_atual.empty:
                                 st.rerun()
                     if c_btn_can.button("⚪ CANCELAR", use_container_width=True): st.rerun()
         
-    st.divider()
+   st.divider()
         
-        # 1. Preparação dos dados (Garantindo formato Brasil nas datas)
+        # 1. Preparação dos dados com conversão manual para String (Formato BR)
+        # Fazemos isso ANTES da busca para que você possa buscar por "09/03"
         df_view = df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']].copy()
         
         cols_data = ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT']
         for col in cols_data:
-            # Força a conversão para texto DD/MM/AAAA para não inverter no padrão americano
+            # Converte para data e depois para texto formatado DD/MM/YYYY
             df_view[col] = pd.to_datetime(df_view[col], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y').fillna("")
 
-        # 2. Filtro estilo "Selecione para EDITAR" (Multiselect com pesquisa)
-        tags_selecionadas = st.multiselect(
-            "🔍 Pesquisar e Filtrar TAGs no Quadro:", 
-            options=sorted(df_view['TAG'].unique()),
-            placeholder="Digite o nome da TAG para filtrar..."
-        )
+        # 2. Barra de busca com KEY fixa para não perder o foco
+        busca = st.text_input("🔍 Digite para buscar:", key="input_busca_quadro")
 
-        # 3. Aplicar o filtro se houver seleção
-        if tags_selecionadas:
-            df_view = df_view[df_view['TAG'].isin(tags_selecionadas)]
+        # 3. Filtro de busca
+        if busca:
+            mask = df_view.apply(lambda row: row.astype(str).str.contains(busca, case=False).any(), axis=1)
+            df_view = df_view[mask]
 
-        # 4. Exibição da Tabela
+        # 4. Exibição com configuração de texto puro para evitar que o Streamlit inverta a data
         st.dataframe(
             df_view, 
             use_container_width=True, 
