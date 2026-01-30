@@ -249,32 +249,28 @@ if not df_atual.empty:
         
         st.divider()
         
-        # 1. Campo de busca
-        busca = st.text_input("🔍 Digite para buscar (TAG, Status ou Data):", placeholder="Ex: ATERRAMENTO ou 09/03")
-
-        # 2. Preparação e Formatação RIGOROSA para DD/MM/AAAA
+        # 1. Preparação dos dados com conversão manual para String (Formato BR)
+        # Fazemos isso ANTES da busca para que você possa buscar por "09/03"
         df_view = df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']].copy()
         
         cols_data = ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT']
-        
         for col in cols_data:
-            # Converte para datetime primeiro para garantir o padrão
-            temp_dt = pd.to_datetime(df_view[col], dayfirst=True, errors='coerce')
-            # Converte para STRING no formato brasileiro e remove os "NaT" (vazios)
-            df_view[col] = temp_dt.dt.strftime('%d/%m/%Y').replace(['NaT', 'nan', None, 'None'], '')
+            # Converte para data e depois para texto formatado DD/MM/YYYY
+            df_view[col] = pd.to_datetime(df_view[col], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y').fillna("")
 
-        # 3. Lógica de Filtro por Escrita
+        # 2. Barra de busca com KEY fixa para não perder o foco
+        busca = st.text_input("🔍 Digite para buscar:", key="input_busca_quadro")
+
+        # 3. Filtro de busca
         if busca:
-            # Procura o termo em todas as colunas
             mask = df_view.apply(lambda row: row.astype(str).str.contains(busca, case=False).any(), axis=1)
             df_view = df_view[mask]
 
-        # 4. Exibição da Tabela Final
+        # 4. Exibição com configuração de texto puro para evitar que o Streamlit inverta a data
         st.dataframe(
             df_view, 
             use_container_width=True, 
             hide_index=True,
-            # Forçamos a coluna como texto para o Streamlit não tentar reformatar para americano
             column_config={col: st.column_config.TextColumn(col) for col in df_view.columns}
         )
 
