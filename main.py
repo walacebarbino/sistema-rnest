@@ -249,29 +249,32 @@ if not df_atual.empty:
         
         st.divider()
         
-        # 1. Campo de busca por texto (Escrita)
+        # 1. Campo de busca
         busca = st.text_input("🔍 Digite para buscar (TAG, Status ou Data):", placeholder="Ex: ATERRAMENTO ou 09/03")
 
-        # 2. Preparação e Formatação dos dados
+        # 2. Preparação e Formatação RIGOROSA para DD/MM/AAAA
         df_view = df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']].copy()
         
-        # Garante que as datas fiquem no formato Brasil para exibição
         cols_data = ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT']
+        
         for col in cols_data:
-            df_view[col] = df_view[col].astype(str).replace(['None', 'nan', 'NaT'], '')
+            # Converte para datetime primeiro para garantir o padrão
+            temp_dt = pd.to_datetime(df_view[col], dayfirst=True, errors='coerce')
+            # Converte para STRING no formato brasileiro e remove os "NaT" (vazios)
+            df_view[col] = temp_dt.dt.strftime('%d/%m/%Y').replace(['NaT', 'nan', None, 'None'], '')
 
         # 3. Lógica de Filtro por Escrita
         if busca:
-            # Procura o termo em todas as colunas da tabela
+            # Procura o termo em todas as colunas
             mask = df_view.apply(lambda row: row.astype(str).str.contains(busca, case=False).any(), axis=1)
             df_view = df_view[mask]
 
-        # 4. Exibição da Tabela
+        # 4. Exibição da Tabela Final
         st.dataframe(
             df_view, 
             use_container_width=True, 
             hide_index=True,
-            # Forçamos as colunas como texto para manter o formato DD/MM/YYYY que vem da planilha
+            # Forçamos a coluna como texto para o Streamlit não tentar reformatar para americano
             column_config={col: st.column_config.TextColumn(col) for col in df_view.columns}
         )
 
