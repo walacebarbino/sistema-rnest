@@ -171,39 +171,70 @@ if not df_atual.empty:
     if aba == "📝 EDIÇÃO/PROGRAMAÇÃO":
         st.subheader(f"📝 Edição por TAG - {disc}")
         c_tag, c_sem = st.columns([2, 1])
-        with c_tag: tag_sel = st.selectbox("Selecione para EDITAR:", sorted(df_atual['TAG'].unique()))
+        with c_tag: 
+            tag_sel = st.selectbox("Selecione para EDITAR:", sorted(df_atual['TAG'].unique()))
+        
         idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
         dados_tag = df_atual.iloc[idx_base]
-        with c_sem: sem_input = st.text_input("Semana da Obra:", value=dados_tag['SEMANA OBRA'])
+        
+        with c_sem: 
+            sem_input = st.text_input("Semana da Obra:", value=dados_tag.get('SEMANA OBRA', ''))
+        
         sug_ini, sug_fim = get_dates_from_week(sem_input)
         
         with st.form("form_edit_final"):
-            c1, c2, c3, c4 = st.columns(4)
             def conv_dt(val, default):
                 try: return datetime.strptime(str(val), "%d/%m/%Y").date()
                 except: return default
+
+            # Linha 1: Programação
+            c1, c2, c3 = st.columns(3)
             v_prev = c1.date_input("Data Previsto", value=conv_dt(dados_tag.get('PREVISTO', ''), None), format="DD/MM/YYYY")
-            v_ini = c2.date_input("Início Prog", value=conv_dt(dados_tag['DATA INIC PROG'], sug_ini), format="DD/MM/YYYY")
-            v_fim = c3.date_input("Fim Prog", value=conv_dt(dados_tag['DATA FIM PROG'], sug_fim), format="DD/MM/YYYY")
-            v_mont = c4.date_input("Data Montagem", value=conv_dt(dados_tag['DATA MONT'], None), format="DD/MM/YYYY")
-            st_atual = calcular_status_tag(v_ini, v_fim, v_mont)
+            v_ini = c2.date_input("Início Prog", value=conv_dt(dados_tag.get('DATA INIC PROG', ''), sug_ini), format="DD/MM/YYYY")
+            v_fim = c3.date_input("Fim Prog", value=conv_dt(dados_tag.get('DATA FIM PROG', ''), sug_fim), format="DD/MM/YYYY")
+            
+            # Linha 2: Execução (Fabricação, Pintura, Montagem, Torque)
+            c4, c5, c6, c7 = st.columns(4)
+            v_fab = c4.date_input("Data Fabricação", value=conv_dt(dados_tag.get('DATA FABRICAÇÃO', ''), None), format="DD/MM/YYYY")
+            v_pin = c5.date_input("Data Pintura", value=conv_dt(dados_tag.get('DATA PINTURA', ''), None), format="DD/MM/YYYY")
+            v_mont = c6.date_input("Data Montagem", value=conv_dt(dados_tag.get('DATA MONT', ''), None), format="DD/MM/YYYY")
+            v_torq = c7.date_input("Data Torque", value=conv_dt(dados_tag.get('DATA TARQUE', ''), None), format="DD/MM/YYYY")
+            
+            # Lógica de Status conforme sua imagem de premissas
+            if v_torq: st_atual = "Concluído"
+            elif v_mont: st_atual = "Aguardando Torque"
+            elif v_fab: st_atual = "Aguardando Pintura/Montagem"
+            elif v_ini or v_fim: st_atual = "Aguardando Fab"
+            else: st_atual = "Aguardando Prog"
+            
             st.info(f"Status Atualizado: **{st_atual}**")
-            v_obs = st.text_input("Observações:", value=dados_tag['OBS'])
+            v_obs = st.text_input("Observações:", value=dados_tag.get('OBS', ''))
             
             if st.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
                 ws_escrita = client.open(map_planilhas[disc]).get_worksheet(0)
-                f_prev = v_prev.strftime("%d/%m/%Y") if v_prev else ""
-                f_ini = v_ini.strftime("%d/%m/%Y") if v_ini else ""
-                f_fim = v_fim.strftime("%d/%m/%Y") if v_fim else ""
-                f_mont = v_mont.strftime("%d/%m/%Y") if v_mont else ""
-                updates = {'SEMANA OBRA': sem_input, 'PREVISTO': f_prev, 'DATA INIC PROG': f_ini, 'DATA FIM PROG': f_fim, 'DATA MONT': f_mont, 'STATUS': st_atual, 'OBS': v_obs}
+                
+                # Formata todas as datas para salvar como texto DD/MM/AAAA
+                f_dates = {
+                    'PREVISTO': v_prev.strftime("%d/%m/%Y") if v_prev else "",
+                    'DATA INIC PROG': v_ini.strftime("%d/%m/%Y") if v_ini else "",
+                    'DATA FIM PROG': v_fim.strftime("%d/%m/%Y") if v_fim else "",
+                    'DATA FABRICAÇÃO': v_fab.strftime("%d/%m/%Y") if v_fab else "",
+                    'DATA PINTURA': v_pin.strftime("%d/%m/%Y") if v_pin else "",
+                    'DATA MONT': v_mont.strftime("%d/%m/%Y") if v_mont else "",
+                    'DATA TARQUE': v_torq.strftime("%d/%m/%Y") if v_torq else ""
+                }
+                
+                updates = {'SEMANA OBRA': sem_input, 'STATUS': st_atual, 'OBS': v_obs, **f_dates}
                 valores_linha = df_atual.iloc[idx_base].tolist()
+                
                 for col, val in updates.items():
-                    if col in cols_map: valores_linha[cols_map[col]-1] = str(val)
+                    if col in cols_map: 
+                        valores_linha[cols_map[col]-1] = str(val)
+                
                 ws_escrita.update(f"A{idx_base + 2}", [valores_linha])
                 st.cache_data.clear()
                 st.success("Salvo com sucesso!")
-                time.sleep(2) # Pausa para ver a mensagem
+                time.sleep(1)
                 st.rerun()
 
         st.divider()
@@ -224,50 +255,49 @@ if not df_atual.empty:
                             nova_linha = [n_tag, "", "", "", "", "", "AGUARDANDO PROG", n_disc, n_desc, n_area, n_des, n_fam, "", n_uni, "", "", ""]
                             ws_escrita.append_row(nova_linha)
                             st.cache_data.clear()
-                            st.success(f"✅ TAG {n_tag} cadastrado com sucesso!")
-                            time.sleep(2) # CORREÇÃO: Pausa para o usuário ver o sucesso
+                            st.success(f"✅ TAG {n_tag} cadastrado!")
+                            time.sleep(1)
                             st.rerun()
                         else: st.error("O campo TAG é obrigatório.")
+
         with col_del:
             with st.expander("🗑️ DELETAR TAG DO BANCO", expanded=False):
                 tag_para_deletar = st.selectbox("Selecione a TAG para DELETAR:", [""] + sorted(df_atual['TAG'].unique().tolist()))
                 if tag_para_deletar:
                     st.warning(f"🚨 ATENÇÃO: {tag_para_deletar}")
-                    confirm_del = st.checkbox("Eu confirmo que desejo apagar este registro")
-                    c_btn_del, c_btn_can = st.columns(2)
-                    if c_btn_del.button("🔴 CONFIRMAR EXCLUSÃO", use_container_width=True):
+                    confirm_del = st.checkbox("Eu confirmo que desejo apagar")
+                    if st.button("🔴 CONFIRMAR EXCLUSÃO", use_container_width=True):
                         if confirm_del:
                             ws_escrita = client.open(map_planilhas[disc]).get_worksheet(0)
                             cell = ws_escrita.find(tag_para_deletar, in_column=1)
                             if cell: 
                                 ws_escrita.delete_rows(cell.row)
                                 st.cache_data.clear()
-                                st.success("Removido com sucesso!")
-                                time.sleep(2)
+                                st.success("Removido!")
+                                time.sleep(1)
                                 st.rerun()
-                    if c_btn_can.button("⚪ CANCELAR", use_container_width=True): st.rerun()
-                        
-                    st.divider()
-        
-        df_visualizacao = df_atual[['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT', 'STATUS', 'OBS']].copy()
-        
-        colunas_data = ['PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA MONT']
-        for col in colunas_data:
-            df_visualizacao[col] = pd.to_datetime(df_visualizacao[col], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y').fillna("")
 
-        busca_input = st.text_input("🔍 Pesquisar no Quadro:", key="busca_quadro_principal")
+        st.divider()
+        # Visualização com as novas colunas
+        cols_final = ['TAG', 'SEMANA OBRA', 'PREVISTO', 'DATA INIC PROG', 'DATA FIM PROG', 'DATA FABRICAÇÃO', 'DATA PINTURA', 'DATA MONT', 'DATA TARQUE', 'STATUS', 'OBS']
+        df_visualizacao = df_atual[[c for c in cols_final if c in df_atual.columns]].copy()
+        
+        # Trava formato DD/MM/AAAA para todas as colunas de data
+        for col in df_visualizacao.columns:
+            if 'DATA' in col or 'PREVISTO' in col:
+                df_visualizacao[col] = pd.to_datetime(df_visualizacao[col], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y').fillna("")
+
+        busca_input = st.text_input("🔍 Pesquisar no Quadro (TAG, Data ou Status):", key="busca_final_estavel")
 
         if busca_input:
             mask = df_visualizacao.apply(lambda row: row.astype(str).str.contains(busca_input, case=False).any(), axis=1)
             df_visualizacao = df_visualizacao[mask]
 
-        config_estilo = {col: st.column_config.TextColumn(col) for col in df_visualizacao.columns}
-        
         st.dataframe(
             df_visualizacao, 
             use_container_width=True, 
             hide_index=True, 
-            column_config=config_estilo
+            column_config={col: st.column_config.TextColumn(col) for col in df_visualizacao.columns}
         )
         
 
