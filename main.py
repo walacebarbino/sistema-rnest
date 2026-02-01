@@ -392,8 +392,10 @@ if not df_atual.empty:
     elif aba == "📋 RELATÓRIOS":
         st.subheader(f"📋 Painel de Relatórios - {disc}")
         
-        # 1. PAINEL DE MÉTRICAS
+        # 1. PAINEL DE MÉTRICAS COMPLETO
         if disc == "ESTRUTURA":
+            # --- BLOCO 1: STATUS ATUAL (6 Colunas) ---
+            st.markdown("#### Status Atual das Peças")
             c1, c2, c3, c4, c5, c6 = st.columns(6)
             c1.metric("Total Tags", len(df_atual))
             c2.metric("Aguard. Prog", len(df_atual[df_atual['STATUS'] == 'Aguardando Prog']))
@@ -401,22 +403,35 @@ if not df_atual.empty:
             c4.metric("Aguard. Pintura", len(df_atual[df_atual['STATUS'] == 'Aguardando Pintura/Montagem']))
             c5.metric("Aguard. Montagem", len(df_atual[df_atual['STATUS'] == 'Aguardando Montagem']))
             c6.metric("Aguard. Torque", len(df_atual[df_atual['STATUS'] == 'Aguardando Torque']))
+
+            # --- BLOCO 2: TOTALIZADORES ACUMULADOS (5 Colunas) ---
+            st.markdown("#### Totais Realizados (Acumulado)")
+            t1, t2, t3, t4, t5 = st.columns(5)
+            # Função interna para contar apenas células preenchidas em colunas específicas
+            def contar_realizado(col): 
+                return len(df_atual[df_atual[col].fillna("").astype(str) != ""]) if col in df_atual.columns else 0
+
+            t1.info(f"📅 Programado: {contar_realizado('DATA INIC PROG')}")
+            t2.info(f"🏭 Fabricado: {contar_realizado('DATA FABRICAÇÃO')}")
+            t3.info(f"🎨 Pintado: {contar_realizado('DATA PINTURA')}")
+            t4.info(f"🏗️ Montagem: {contar_realizado('DATA MONT')}")
+            t5.success(f"🔧 Torqueado: {contar_realizado('DATA TARQUE')}")
         else:
+            # Layout para Elétrica / Instrumentação
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Total", len(df_atual))
-            m2.metric("Montados ✅", len(df_atual[df_atual['STATUS'].isin(['MONTADO', 'Concluído'])]))
+            m2.metric("Montados ✅", len(df_atual[df_atual['DATA MONT'].fillna("") != ""]))
             m3.metric("Programados 📅", len(df_atual[df_atual['DATA INIC PROG'].fillna("") != ""]))
             m4.metric("Aguardando ⏳", len(df_atual[df_atual['DATA INIC PROG'].fillna("") == ""]))
 
         st.divider()
 
-        # 2. PROGRAMAÇÃO
+        # 2. SEÇÃO: PROGRAMAÇÃO
         st.markdown("### 📅 PROGRAMAÇÃO")
-        # Filtro robusto para evitar erros com tipos diferentes
         df_p = df_atual[df_atual['DATA INIC PROG'].fillna("").astype(str) != ""].copy()
         
         semanas_prog = sorted([s for s in df_p['SEMANA OBRA'].unique() if s]) if not df_p.empty else []
-        sem_sel_p = st.selectbox("Filtrar Programação por Semana:", ["TODAS"] + semanas_prog, key="rel_prog_sem")
+        sem_sel_p = st.selectbox("Filtrar Programação por Semana:", ["TODAS"] + semanas_prog, key="rel_prog_sem_new")
         
         if sem_sel_p != "TODAS": 
             df_p = df_p[df_p['SEMANA OBRA'] == sem_sel_p]
@@ -430,15 +445,15 @@ if not df_atual.empty:
             
             st.dataframe(df_p[cols_p_safe], use_container_width=True, hide_index=True)
             
-            # PROTEÇÃO: Só tenta exportar se houver linhas, evitando o erro do xlsxwriter
+            # Exportação segura
             excel_p = exportar_excel_com_cabecalho(df_p[cols_p_safe], f"RELATÓRIO DE PROGRAMAÇÃO - {disc}")
-            st.download_button("📥 EXPORTAR PROGRAMAÇÃO", excel_p, f"Programacao_{disc}.xlsx", use_container_width=True)
+            st.download_button("📥 EXPORTAR PROGRAMAÇÃO", excel_p, f"Prog_{disc}.xlsx", use_container_width=True)
         else:
-            st.info("Nenhum item programado para exibição.")
+            st.info("Nenhum item programado.")
 
         st.divider()
 
-        # 3. AGUARDANDO PROGRAMAÇÃO
+        # 3. SEÇÃO: AGUARDANDO PROGRAMAÇÃO
         st.markdown("### 🚩 AGUARDANDO PROGRAMAÇÃO")
         df_pend = df_atual[df_atual['DATA INIC PROG'].fillna("").astype(str) == ""].copy()
         
@@ -450,18 +465,17 @@ if not df_atual.empty:
                 df_pend['PREVISTO'] = pd.to_datetime(df_pend['PREVISTO'], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y').fillna("")
             
             st.dataframe(df_pend[cols_pend_safe], use_container_width=True, hide_index=True)
-            excel_pend = exportar_excel_com_cabecalho(df_pend[cols_pend_safe], f"AGUARDANDO PROGRAMAÇÃO - {disc}")
-            st.download_button("📥 EXPORTAR AGUARDANDO", excel_pend, f"Aguardando_{disc}.xlsx", use_container_width=True)
-        else:
-            st.success("Tudo programado! Nenhuma pendência encontrada.")
+            excel_pend = exportar_excel_com_cabecalho(df_pend[cols_pend_safe], f"PENDÊNCIAS - {disc}")
+            st.download_button("📥 EXPORTAR AGUARDANDO", excel_pend, f"Pendencias_{disc}.xlsx", use_container_width=True)
 
         st.divider()
 
-        # 4. RELATÓRIO DE AVANÇO
+        # 4. SEÇÃO: RELATÓRIO DE AVANÇO
         st.markdown("### 📈 RELATÓRIO DE AVANÇO")
         semanas_av = sorted([s for s in df_atual['SEMANA OBRA'].unique() if s], reverse=True)
-        sem_sel_av = st.selectbox("Selecione a Semana:", semanas_av if semanas_av else ["-"], key="rel_av_sem")
+        sem_sel_av = st.selectbox("Selecione a Semana:", semanas_av if semanas_av else ["-"], key="rel_av_sem_new")
         
+        # Filtro: Itens com data de montagem na semana selecionada
         df_av = df_atual[(df_atual['SEMANA OBRA'] == sem_sel_av) & (df_atual['DATA MONT'].fillna("").astype(str) != "")].copy()
         
         cols_av_alvo = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'DATA TARQUE', 'ÁREA', 'STATUS', 'OBS']
@@ -473,10 +487,10 @@ if not df_atual.empty:
                     df_av[d_col] = pd.to_datetime(df_av[d_col], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y').fillna("")
             
             st.dataframe(df_av[cols_av_safe], use_container_width=True, hide_index=True)
-            excel_av = exportar_excel_com_cabecalho(df_av[cols_av_safe], f"RELATÓRIO DE AVANÇO - {disc}")
+            excel_av = exportar_excel_com_cabecalho(df_av[cols_av_safe], f"AVANÇO SEMANAL - {disc}")
             st.download_button("📥 EXPORTAR AVANÇO", excel_av, f"Avanco_{disc}.xlsx", use_container_width=True)
         else:
-            st.warning(f"Sem dados de avanço para a semana {sem_sel_av}.")
+            st.warning(f"Sem avanço registrado para a semana {sem_sel_av}.")
 
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
         st.subheader(f"📤 Exportação e Importação - {disc}")
