@@ -367,7 +367,7 @@ if not df_atual.empty:
     elif aba == "📋 RELATÓRIOS":
         st.subheader(f"📋 Painel de Relatórios - {disc}")
         
-        # 1. PAINEL DE MÉTRICAS (Dinâmico para evitar erros)
+        # 1. PAINEL DE MÉTRICAS
         if disc == "ESTRUTURA":
             c1, c2, c3, c4, c5, c6 = st.columns(6)
             c1.metric("Total Tags", len(df_atual))
@@ -379,75 +379,79 @@ if not df_atual.empty:
         else:
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Total", len(df_atual))
-            # Ajuste de filtro para aceitar tanto 'MONTADO' quanto novos status se houver
-            m2.metric("Montados ✅", len(df_atual[df_atual['STATUS'].str.contains('MONTADO|Concluído', na=False, case=False)]))
+            m2.metric("Montados ✅", len(df_atual[df_atual['STATUS'].isin(['MONTADO', 'Concluído'])]))
             m3.metric("Programados 📅", len(df_atual[df_atual['DATA INIC PROG'].fillna("") != ""]))
             m4.metric("Aguardando ⏳", len(df_atual[df_atual['DATA INIC PROG'].fillna("") == ""]))
 
         st.divider()
 
-        # 2. PROGRAMAÇÃO (Aplicado a todas as disciplinas)
+        # 2. PROGRAMAÇÃO
         st.markdown("### 📅 PROGRAMAÇÃO")
-        df_p = df_atual[df_atual['DATA INIC PROG'].fillna("") != ""].copy()
-        semanas_prog = sorted(df_p['SEMANA OBRA'].unique()) if not df_p.empty else []
-        sem_sel_p = st.selectbox("Filtrar Programação por Semana:", ["TODAS"] + semanas_prog, key="filter_rel_p")
+        # Filtro robusto para evitar erros com tipos diferentes
+        df_p = df_atual[df_atual['DATA INIC PROG'].fillna("").astype(str) != ""].copy()
+        
+        semanas_prog = sorted([s for s in df_p['SEMANA OBRA'].unique() if s]) if not df_p.empty else []
+        sem_sel_p = st.selectbox("Filtrar Programação por Semana:", ["TODAS"] + semanas_prog, key="rel_prog_sem")
         
         if sem_sel_p != "TODAS": 
             df_p = df_p[df_p['SEMANA OBRA'] == sem_sel_p]
         
-        # Colunas unificadas: TAG, ÁREA (novo), SEMANA, DATA PROGRAMADO, DESCRIÇÃO
-        cols_p = ['TAG', 'ÁREA', 'SEMANA OBRA', 'DATA INIC PROG', 'DESCRIÇÃO']
-        cols_p_safe = [c for c in cols_p if c in df_atual.columns]
+        cols_p_alvo = ['TAG', 'ÁREA', 'SEMANA OBRA', 'DATA INIC PROG', 'DESCRIÇÃO']
+        cols_p_safe = [c for c in cols_p_alvo if c in df_p.columns]
         
-        if 'DATA INIC PROG' in df_p.columns:
-            df_p['DATA INIC PROG'] = pd.to_datetime(df_p['DATA INIC PROG'], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y').fillna("")
-
-        st.dataframe(df_p[cols_p_safe], use_container_width=True, hide_index=True, 
-                     column_config={c: st.column_config.TextColumn(c) for c in cols_p_safe})
-        
-        excel_p = exportar_excel_com_cabecalho(df_p[cols_p_safe], f"RELATÓRIO DE PROGRAMAÇÃO - {disc}")
-        st.download_button("📥 EXPORTAR PROGRAMAÇÃO", excel_p, f"Programacao_{disc}.xlsx", use_container_width=True)
+        if not df_p.empty:
+            if 'DATA INIC PROG' in df_p.columns:
+                df_p['DATA INIC PROG'] = pd.to_datetime(df_p['DATA INIC PROG'], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y').fillna("")
+            
+            st.dataframe(df_p[cols_p_safe], use_container_width=True, hide_index=True)
+            
+            # PROTEÇÃO: Só tenta exportar se houver linhas, evitando o erro do xlsxwriter
+            excel_p = exportar_excel_com_cabecalho(df_p[cols_p_safe], f"RELATÓRIO DE PROGRAMAÇÃO - {disc}")
+            st.download_button("📥 EXPORTAR PROGRAMAÇÃO", excel_p, f"Programacao_{disc}.xlsx", use_container_width=True)
+        else:
+            st.info("Nenhum item programado para exibição.")
 
         st.divider()
 
-        # 3. AGUARDANDO PROGRAMAÇÃO (Aplicado a todas as disciplinas)
+        # 3. AGUARDANDO PROGRAMAÇÃO
         st.markdown("### 🚩 AGUARDANDO PROGRAMAÇÃO")
-        df_pend = df_atual[df_atual['DATA INIC PROG'].fillna("") == ""].copy()
+        df_pend = df_atual[df_atual['DATA INIC PROG'].fillna("").astype(str) == ""].copy()
         
-        # Colunas: TAG, DESCRIÇÃO, ÁREA, DOCUMENTO DE REFERENCIA (novo), STATUS, PREVISTO, OBS
-        cols_pend = ['TAG', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO DE REFERENCIA', 'STATUS', 'PREVISTO', 'OBS']
-        cols_pend_safe = [c for c in cols_pend if c in df_atual.columns]
+        cols_pend_alvo = ['TAG', 'DESCRIÇÃO', 'ÁREA', 'DOCUMENTO DE REFERENCIA', 'STATUS', 'PREVISTO', 'OBS']
+        cols_pend_safe = [c for c in cols_pend_alvo if c in df_pend.columns]
         
-        if 'PREVISTO' in df_pend.columns:
-            df_pend['PREVISTO'] = pd.to_datetime(df_pend['PREVISTO'], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y').fillna("")
-
-        st.dataframe(df_pend[cols_pend_safe], use_container_width=True, hide_index=True,
-                     column_config={c: st.column_config.TextColumn(c) for c in cols_pend_safe})
+        if not df_pend.empty:
+            if 'PREVISTO' in df_pend.columns:
+                df_pend['PREVISTO'] = pd.to_datetime(df_pend['PREVISTO'], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y').fillna("")
+            
+            st.dataframe(df_pend[cols_pend_safe], use_container_width=True, hide_index=True)
+            excel_pend = exportar_excel_com_cabecalho(df_pend[cols_pend_safe], f"AGUARDANDO PROGRAMAÇÃO - {disc}")
+            st.download_button("📥 EXPORTAR AGUARDANDO", excel_pend, f"Aguardando_{disc}.xlsx", use_container_width=True)
+        else:
+            st.success("Tudo programado! Nenhuma pendência encontrada.")
 
         st.divider()
 
-        # 4. RELATÓRIO DE AVANÇO (Aplicado a todas as disciplinas)
+        # 4. RELATÓRIO DE AVANÇO
         st.markdown("### 📈 RELATÓRIO DE AVANÇO")
-        semanas_disponiveis = sorted(df_atual['SEMANA OBRA'].unique(), reverse=True)
-        semana_sel = st.selectbox("Selecione a Semana:", semanas_disponiveis if semanas_disponiveis else ["-"], key="filter_rel_av")
+        semanas_av = sorted([s for s in df_atual['SEMANA OBRA'].unique() if s], reverse=True)
+        sem_sel_av = st.selectbox("Selecione a Semana:", semanas_av if semanas_av else ["-"], key="rel_av_sem")
         
-        # Filtra quem tem Data de Montagem preenchida
-        df_semana = df_atual[(df_atual['SEMANA OBRA'] == semana_sel) & (df_atual['DATA MONT'].fillna("") != "")].copy()
+        df_av = df_atual[(df_atual['SEMANA OBRA'] == sem_sel_av) & (df_atual['DATA MONT'].fillna("").astype(str) != "")].copy()
         
-        # Colunas: TAG, DESCRIÇÃO, DATA MONT, DATA TARQUE (se houver), ÁREA, STATUS, OBS
-        cols_av = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'DATA TARQUE', 'ÁREA', 'STATUS', 'OBS']
-        cols_av_safe = [c for c in cols_av if c in df_atual.columns]
+        cols_av_alvo = ['TAG', 'DESCRIÇÃO', 'DATA MONT', 'DATA TARQUE', 'ÁREA', 'STATUS', 'OBS']
+        cols_av_safe = [c for c in cols_av_alvo if c in df_av.columns]
         
-        for d_col in ['DATA MONT', 'DATA TARQUE']:
-            if d_col in df_semana.columns:
-                df_semana[d_col] = pd.to_datetime(df_semana[d_col], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y').fillna("")
-
-        st.dataframe(df_semana[cols_av_safe], use_container_width=True, hide_index=True,
-                     column_config={c: st.column_config.TextColumn(c) for c in cols_av_safe})
-        
-        if not df_semana.empty:
-            excel_semana = exportar_excel_com_cabecalho(df_semana[cols_av_safe], f"RELATÓRIO DE AVANÇO - SEMANA {semana_sel}")
-            st.download_button(f"📥 EXPORTAR RELATÓRIO DE AVANÇO", excel_semana, f"Relatorio_Avanco_{semana_sel}_{disc}.xlsx", use_container_width=True)
+        if not df_av.empty:
+            for d_col in ['DATA MONT', 'DATA TARQUE']:
+                if d_col in df_av.columns:
+                    df_av[d_col] = pd.to_datetime(df_av[d_col], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y').fillna("")
+            
+            st.dataframe(df_av[cols_av_safe], use_container_width=True, hide_index=True)
+            excel_av = exportar_excel_com_cabecalho(df_av[cols_av_safe], f"RELATÓRIO DE AVANÇO - {disc}")
+            st.download_button("📥 EXPORTAR AVANÇO", excel_av, f"Avanco_{disc}.xlsx", use_container_width=True)
+        else:
+            st.warning(f"Sem dados de avanço para a semana {sem_sel_av}.")
 
     elif aba == "📤 EXPORTAÇÃO E IMPORTAÇÕES":
         st.subheader(f"📤 Exportação e Importação - {disc}")
