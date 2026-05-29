@@ -358,35 +358,33 @@ if aba == "📝 EDIÇÃO/PROGRAMAÇÃO":
                     cell = ws_escrita.find(tag_para_deletar, in_column=1)
 
                     if cell:
-                        ws_escrita.delete_rows(cell.row)
-                        st.cache_data.clear()
-                        st.success("Removido!")
-                        time.sleep(1)
-                        st.rerun()
+    ws_escrita.delete_rows(cell.row)
+    st.cache_data.clear()
+    st.success("Removido!")
+    time.sleep(1)
+    st.rerun()
 
-    with tab3:
-        st.markdown("#### Quadro de Visualização")
+with tab3:
+    st.markdown("#### Quadro de Visualização")
 
-        cols_v = ['TAG', 'ÁREA', 'SEMANA OBRA', 'STATUS', 'DATA MONT', 'OBS']
-        if disc == "ESTRUTURA":
-            cols_v = ['TAG', 'ÁREA', 'SEMANA OBRA', 'STATUS', 'DATA FABRICAÇÃO', 'DATA PINTURA', 'DATA MONT', 'DATA TARQUE']
+    cols_v = ['TAG', 'ÁREA', 'SEMANA OBRA', 'STATUS', 'DATA MONT', 'OBS']
+    if disc == "ESTRUTURA":
+        cols_v = ['TAG', 'ÁREA', 'SEMANA OBRA', 'STATUS', 'DATA FABRICAÇÃO', 'DATA PINTURA', 'DATA MONT', 'DATA TARQUE']
 
-        df_vis = df_atual[[c for c in cols_v if c in df_atual.columns]].copy()
-        st.dataframe(df_vis, use_container_width=True, hide_index=True)
-        
+    df_vis = df_atual[[c for c in cols_v if c in df_atual.columns]].copy()
+    st.dataframe(df_vis, use_container_width=True, hide_index=True)
 
-    elif aba == "📊 CURVA S":
-        st.subheader(f"📊 Curva S Semanal e Avanço - {disc}")
-        
-        # 1. Indicadores de Topo
-        total_t = len(df_atual)
-        montados = len(df_atual[df_atual['STATUS'] == 'MONTADO'])
-        per_real = (montados / total_t * 100) if total_t > 0 else 0
-        
-        c1, c2 = st.columns(2)
-        c1.metric("Avanço Total Realizado", f"{per_real:.2f}%")
-        c2.write("Progresso Visual:")
-        c2.progress(per_real / 100)
+elif aba == "📊 CURVA S":
+    st.subheader(f"📊 Curva S Semanal e Avanço - {disc}")
+    
+    total_t = len(df_atual)
+    montados = len(df_atual[df_atual['STATUS'] == 'MONTADO'])
+    per_real = (montados / total_t * 100) if total_t > 0 else 0
+    
+    c1, c2 = st.columns(2)
+    c1.metric("Avanço Total Realizado", f"{per_real:.2f}%")
+    c2.write("Progresso Visual:")
+    c2.progress(per_real / 100)
 
         # 2. Preparação dos Dados (Semanas)
         df_c = df_atual.copy()
