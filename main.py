@@ -16,21 +16,40 @@ DATA_INICIO_OBRA = datetime(2025, 9, 29)
 @st.cache_data
 def exportar_excel_com_cabecalho(df, titulo_relatorio):
     output = BytesIO()
+    df_excel = df.copy()
+
+    # Garante texto simples em todas as colunas para evitar erro no map(len)
+    for col in df_excel.columns:
+        df_excel[col] = df_excel[col].fillna("").astype(str)
+
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='Relatorio', startrow=8)
+        df_excel.to_excel(writer, index=False, sheet_name='Relatorio', startrow=8)
         workbook = writer.book
         worksheet = writer.sheets['Relatorio']
-        fmt_titulo = workbook.add_format({'bold': True, 'font_size': 14, 'align': 'center', 'valign': 'vcenter'})
+
+        fmt_titulo = workbook.add_format({
+            'bold': True,
+            'font_size': 14,
+            'align': 'center',
+            'valign': 'vcenter'
+        })
         fmt_sub = workbook.add_format({'font_size': 10, 'italic': True})
+
         try:
             worksheet.insert_image('A1', 'LOGO2.png', {'x_scale': 0.4, 'y_scale': 0.4})
         except:
             pass
-        worksheet.merge_range('C3:F5', titulo_relatorio.upper(), fmt_titulo)
+
+        worksheet.merge_range('C3:F5', str(titulo_relatorio).upper(), fmt_titulo)
         worksheet.write('A7', f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", fmt_sub)
-        for i, col in enumerate(df.columns):
-            column_len = max(df[col].astype(str).map(len).max(), len(col)) + 3
+
+        for i, col in enumerate(df_excel.columns):
+            max_len_coluna = df_excel[col].str.len().max()
+            if pd.isna(max_len_coluna):
+                max_len_coluna = 0
+            column_len = max(int(max_len_coluna), len(str(col))) + 3
             worksheet.set_column(i, i, column_len)
+
     return output.getvalue()
 
 if 'logado' not in st.session_state:
