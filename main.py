@@ -169,129 +169,214 @@ if not df_atual.empty:
     cols_map = {col: i + 1 for i, col in enumerate(df_atual.columns)}
     cfg_rel = {"TAG": st.column_config.TextColumn(width="medium"), "DESCRIÇÃO": st.column_config.TextColumn(width="large"), "OBS": st.column_config.TextColumn(width="large"), "DOCUMENTO": st.column_config.TextColumn(width="medium")}
 
-    if aba == "📝 EDIÇÃO/PROGRAMAÇÃO":
-        st.subheader(f"📝 Edição por TAG - {disc}")
-        
-        # --- BLOCO DE SELEÇÃO E EDIÇÃO ---
-        c_tag, c_sem = st.columns([2, 1])
-        with c_tag: 
-            tag_sel = st.selectbox("Selecione para EDITAR:", sorted(df_atual['TAG'].unique()))
-        
-        idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
-        dados_tag = df_atual.iloc[idx_base]
-        
-        with c_sem: 
-            sem_input = st.text_input("Semana da Obra:", value=dados_tag.get('SEMANA OBRA', ''))
-        
-        sug_ini, sug_fim = get_dates_from_week(sem_input)
-        
-        with st.form("form_edit_final"):
-            def conv_dt(val, default):
-                try: return datetime.strptime(str(val), "%d/%m/%Y").date()
-                except: return default
+   if aba == "📝 EDIÇÃO/PROGRAMAÇÃO":
+    st.subheader(f"📝 Edição por TAG - {disc}")
 
-            # CAMPOS COMUNS
-            c1, c2, c3 = st.columns(3)
-            v_prev = c1.date_input("Data Previsto", value=conv_dt(dados_tag.get('PREVISTO', ''), None), format="DD/MM/YYYY")
-            v_ini = c2.date_input("Início Prog", value=conv_dt(dados_tag.get('DATA INIC PROG', ''), sug_ini), format="DD/MM/YYYY")
-            v_fim = c3.date_input("Fim Prog", value=conv_dt(dados_tag.get('DATA FIM PROG', ''), sug_fim), format="DD/MM/YYYY")
-            
-            if disc == "ESTRUTURA":
-                c4, c5, c6, c7 = st.columns(4)
-                v_fab = c4.date_input("Data Fabricação", value=conv_dt(dados_tag.get('DATA FABRICAÇÃO', ''), None), format="DD/MM/YYYY")
-                v_pin = c5.date_input("Data Pintura", value=conv_dt(dados_tag.get('DATA PINTURA', ''), None), format="DD/MM/YYYY")
-                v_mont = c6.date_input("Data Montagem", value=conv_dt(dados_tag.get('DATA MONT', ''), None), format="DD/MM/YYYY")
-                v_torq = c7.date_input("Data Torque", value=conv_dt(dados_tag.get('DATA TARQUE', ''), None), format="DD/MM/YYYY")
-                
-                # Regra de Status ESTRUTURA
-                if v_torq: st_atual = "Concluído"
-                elif v_mont: st_atual = "Aguardando Torque"
-                elif v_fab: st_atual = "Aguardando Pintura/Montagem"
-                elif v_ini: st_atual = "Aguardando Fab"
-                else: st_atual = "Aguardando Prog"
-            else:
-                v_mont = st.date_input("Data Montagem", value=conv_dt(dados_tag.get('DATA MONT', ''), None), format="DD/MM/YYYY")
-                st_atual = calcular_status_tag(v_ini, v_fim, v_mont)
-                v_fab = v_pin = v_torq = None
+    st.markdown("Selecione a TAG e atualize os campos operacionais abaixo.")
 
-            st.info(f"Status Atualizado: **{st_atual}**")
-            v_obs = st.text_input("Observações:", value=dados_tag.get('OBS', ''))
-            
-            if st.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True):
-                ws_escrita = client.open(map_planilhas[disc]).get_worksheet(0)
-                f_dates = {
-                    'PREVISTO': v_prev.strftime("%d/%m/%Y") if v_prev else "",
-                    'DATA INIC PROG': v_ini.strftime("%d/%m/%Y") if v_ini else "",
-                    'DATA FIM PROG': v_fim.strftime("%d/%m/%Y") if v_fim else "",
-                    'DATA MONT': v_mont.strftime("%d/%m/%Y") if v_mont else ""
-                }
-                if disc == "ESTRUTURA":
-                    f_dates['DATA FABRICAÇÃO'] = v_fab.strftime("%d/%m/%Y") if v_fab else ""
-                    f_dates['DATA PINTURA'] = v_pin.strftime("%d/%m/%Y") if v_pin else ""
-                    f_dates['DATA TARQUE'] = v_torq.strftime("%d/%m/%Y") if v_torq else ""
+    def conv_dt(val, default=None):
+        try:
+            return datetime.strptime(str(val), "%d/%m/%Y").date()
+        except:
+            return default
 
-                updates = {'SEMANA OBRA': sem_input, 'STATUS': st_atual, 'OBS': v_obs, **f_dates}
-                valores_linha = df_atual.iloc[idx_base].tolist()
-                for col, val in updates.items():
-                    if col in cols_map: valores_linha[cols_map[col]-1] = str(val)
-                
-                ws_escrita.update(f"A{idx_base + 2}", [valores_linha])
-                st.cache_data.clear()
-                st.success("Salvo com sucesso!")
-                time.sleep(1)
-                st.rerun()
+    tags_disponiveis = sorted(df_atual['TAG'].unique())
+    c_top_1, c_top_2 = st.columns([2.2, 1])
 
-        st.divider()
+    with c_top_1:
+        tag_sel = st.selectbox("Selecione para EDITAR:", tags_disponiveis)
 
-        # --- RESTAURADO: BLOCO DE CADASTRO E EXCLUSÃO ---
-        col_cad, col_del = st.columns(2)
-        with col_cad:
-            with st.expander("➕ CADASTRAR NOVO TAG", expanded=False):
-                with st.form("form_novo_tag"):
-                    c1, c2 = st.columns(2)
-                    n_tag = c1.text_input("TAG *")
-                    n_disc = c2.text_input("DISCIPLINA", value=disc)
-                    n_desc = st.text_input("DESCRIÇÃO")
-                    c3, c4, c5 = st.columns(3)
-                    n_fam = c3.text_input("FAMÍLIA"); n_uni = c4.text_input("UNIDADE"); n_area = c5.text_input("ÁREA")
-                    n_des = st.text_input("DESENHO (DOC)")
-                    if st.form_submit_button("🚀 CADASTRAR NO BANCO"):
-                        if n_tag:
-                            ws_escrita = client.open(map_planilhas[disc]).get_worksheet(0)
-                            # Criando linha com 17 colunas (padrão do seu banco)
-                            nova_linha = [n_tag, "", "", "", "", "", "Aguardando Prog", n_disc, n_desc, n_area, n_des, n_fam, "", n_uni, "", "", ""]
-                            ws_escrita.append_row(nova_linha)
-                            st.cache_data.clear()
-                            st.success(f"✅ TAG {n_tag} cadastrado!")
-                            time.sleep(1)
-                            st.rerun()
-                        else: st.error("O campo TAG é obrigatório.")
+    idx_base = df_atual.index[df_atual['TAG'] == tag_sel][0]
+    dados_tag = df_atual.iloc[idx_base]
 
-        with col_del:
-            with st.expander("🗑️ DELETAR TAG DO BANCO", expanded=False):
-                tag_para_deletar = st.selectbox("Selecione para DELETAR:", [""] + sorted(df_atual['TAG'].unique().tolist()))
-                if tag_para_deletar:
-                    st.warning(f"🚨 CONFIRMAR EXCLUSÃO DE: {tag_para_deletar}")
-                    confirm_del = st.checkbox("Eu confirmo a exclusão definitiva")
-                    if st.button("🔴 CONFIRMAR EXCLUSÃO", use_container_width=True) and confirm_del:
-                        ws_escrita = client.open(map_planilhas[disc]).get_worksheet(0)
-                        cell = ws_escrita.find(tag_para_deletar, in_column=1)
-                        if cell: 
-                            ws_escrita.delete_rows(cell.row)
-                            st.cache_data.clear()
-                            st.success("Removido!")
-                            time.sleep(1)
-                            st.rerun()
+    with c_top_2:
+        sem_input = st.text_input("Semana da Obra:", value=dados_tag.get('SEMANA OBRA', ''))
 
-        st.divider()
-        
-        # --- QUADRO DE VISUALIZAÇÃO ---
-        cols_v = ['TAG', 'ÁREA', 'SEMANA OBRA', 'STATUS', 'DATA MONT', 'OBS']
+    sug_ini, sug_fim = get_dates_from_week(sem_input)
+
+    with st.container(border=True):
+        col_info_1, col_info_2, col_info_3 = st.columns(3)
+
+        with col_info_1:
+            st.caption("TAG")
+            st.write(f"**{dados_tag.get('TAG', '')}**")
+
+        with col_info_2:
+            st.caption("ÁREA")
+            st.write(f"**{dados_tag.get('ÁREA', '')}**")
+
+        with col_info_3:
+            st.caption("DESCRIÇÃO")
+            st.write(f"**{dados_tag.get('DESCRIÇÃO', '')}**")
+
+    with st.form("form_edit_final"):
+        st.markdown("### Datas de Programação")
+
+        c1, c2, c3 = st.columns(3)
+        v_prev = c1.date_input(
+            "Data Previsto",
+            value=conv_dt(dados_tag.get('PREVISTO', ''), None),
+            format="DD/MM/YYYY"
+        )
+        v_ini = c2.date_input(
+            "Início Prog",
+            value=conv_dt(dados_tag.get('DATA INIC PROG', ''), sug_ini),
+            format="DD/MM/YYYY"
+        )
+        v_fim = c3.date_input(
+            "Fim Prog",
+            value=conv_dt(dados_tag.get('DATA FIM PROG', ''), sug_fim),
+            format="DD/MM/YYYY"
+        )
+
         if disc == "ESTRUTURA":
-            cols_v = ['TAG', 'ÁREA', 'SEMANA OBRA', 'STATUS', 'DATA FABRICAÇÃO', 'DATA PINTURA', 'DATA MONT', 'DATA TARQUE']
-        
-        df_vis = df_atual[[c for c in cols_v if c in df_atual.columns]].copy()
-        st.dataframe(df_vis, use_container_width=True, hide_index=True)
+            st.markdown("### Datas de Produção e Montagem")
+
+            c4, c5, c6, c7 = st.columns(4)
+            v_fab = c4.date_input(
+                "Data Fabricação",
+                value=conv_dt(dados_tag.get('DATA FABRICAÇÃO', ''), None),
+                format="DD/MM/YYYY"
+            )
+            v_pin = c5.date_input(
+                "Data Pintura",
+                value=conv_dt(dados_tag.get('DATA PINTURA', ''), None),
+                format="DD/MM/YYYY"
+            )
+            v_mont = c6.date_input(
+                "Data Montagem",
+                value=conv_dt(dados_tag.get('DATA MONT', ''), None),
+                format="DD/MM/YYYY"
+            )
+            v_torq = c7.date_input(
+                "Data Torque",
+                value=conv_dt(dados_tag.get('DATA TARQUE', ''), None),
+                format="DD/MM/YYYY"
+            )
+
+            if v_torq:
+                st_atual = "Concluído"
+            elif v_mont:
+                st_atual = "Aguardando Torque"
+            elif v_fab:
+                st_atual = "Aguardando Pintura/Montagem"
+            elif v_ini:
+                st_atual = "Aguardando Fab"
+            else:
+                st_atual = "Aguardando Prog"
+        else:
+            st.markdown("### Montagem")
+
+            v_mont = st.date_input(
+                "Data Montagem",
+                value=conv_dt(dados_tag.get('DATA MONT', ''), None),
+                format="DD/MM/YYYY"
+            )
+            st_atual = calcular_status_tag(v_ini, v_fim, v_mont)
+            v_fab = v_pin = v_torq = None
+
+        st.markdown("### Status e Observações")
+        st.info(f"Status Atualizado: **{st_atual}**")
+        v_obs = st.text_input("Observações:", value=dados_tag.get('OBS', ''))
+
+        col_btn_1, col_btn_2 = st.columns([1.3, 1])
+        salvar = col_btn_1.form_submit_button("💾 SALVAR ALTERAÇÕES", use_container_width=True)
+        limpar = col_btn_2.form_submit_button("↺ DESCARTAR E RECARREGAR", use_container_width=True)
+
+        if salvar:
+            ws_escrita = client.open(map_planilhas[disc]).get_worksheet(0)
+            f_dates = {
+                'PREVISTO': v_prev.strftime("%d/%m/%Y") if v_prev else "",
+                'DATA INIC PROG': v_ini.strftime("%d/%m/%Y") if v_ini else "",
+                'DATA FIM PROG': v_fim.strftime("%d/%m/%Y") if v_fim else "",
+                'DATA MONT': v_mont.strftime("%d/%m/%Y") if v_mont else ""
+            }
+
+            if disc == "ESTRUTURA":
+                f_dates['DATA FABRICAÇÃO'] = v_fab.strftime("%d/%m/%Y") if v_fab else ""
+                f_dates['DATA PINTURA'] = v_pin.strftime("%d/%m/%Y") if v_pin else ""
+                f_dates['DATA TARQUE'] = v_torq.strftime("%d/%m/%Y") if v_torq else ""
+
+            updates = {'SEMANA OBRA': sem_input, 'STATUS': st_atual, 'OBS': v_obs, **f_dates}
+            valores_linha = df_atual.iloc[idx_base].tolist()
+
+            for col, val in updates.items():
+                if col in cols_map:
+                    valores_linha[cols_map[col] - 1] = str(val)
+
+            ws_escrita.update(f"A{idx_base + 2}", [valores_linha])
+            st.cache_data.clear()
+            st.success("Salvo com sucesso!")
+            time.sleep(1)
+            st.rerun()
+
+        if limpar:
+            st.rerun()
+
+    st.divider()
+
+    st.markdown("### Ações Administrativas")
+    col_cad, col_del = st.columns(2)
+
+    with col_cad:
+        with st.expander("➕ CADASTRAR NOVO TAG", expanded=False):
+            with st.form("form_novo_tag"):
+                c1, c2 = st.columns(2)
+                n_tag = c1.text_input("TAG *")
+                n_disc = c2.text_input("DISCIPLINA", value=disc)
+                n_desc = st.text_input("DESCRIÇÃO")
+
+                c3, c4, c5 = st.columns(3)
+                n_fam = c3.text_input("FAMÍLIA")
+                n_uni = c4.text_input("UNIDADE")
+                n_area = c5.text_input("ÁREA")
+
+                n_des = st.text_input("DESENHO (DOC)")
+
+                if st.form_submit_button("🚀 CADASTRAR NO BANCO", use_container_width=True):
+                    if n_tag:
+                        ws_escrita = client.open(map_planilhas[disc]).get_worksheet(0)
+                        nova_linha = [n_tag, "", "", "", "", "", "Aguardando Prog", n_disc, n_desc, n_area, n_des, n_fam, "", n_uni, "", "", ""]
+                        ws_escrita.append_row(nova_linha)
+                        st.cache_data.clear()
+                        st.success(f"✅ TAG {n_tag} cadastrado!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("O campo TAG é obrigatório.")
+
+    with col_del:
+        with st.expander("🗑️ DELETAR TAG DO BANCO", expanded=False):
+            tag_para_deletar = st.selectbox(
+                "Selecione para DELETAR:",
+                [""] + sorted(df_atual['TAG'].unique().tolist())
+            )
+
+            if tag_para_deletar:
+                st.warning(f"🚨 CONFIRMAR EXCLUSÃO DE: {tag_para_deletar}")
+                confirm_del = st.checkbox("Eu confirmo a exclusão definitiva")
+
+                if st.button("🔴 CONFIRMAR EXCLUSÃO", use_container_width=True) and confirm_del:
+                    ws_escrita = client.open(map_planilhas[disc]).get_worksheet(0)
+                    cell = ws_escrita.find(tag_para_deletar, in_column=1)
+
+                    if cell:
+                        ws_escrita.delete_rows(cell.row)
+                        st.cache_data.clear()
+                        st.success("Removido!")
+                        time.sleep(1)
+                        st.rerun()
+
+    st.divider()
+
+    st.markdown("### Quadro de Visualização")
+
+    cols_v = ['TAG', 'ÁREA', 'SEMANA OBRA', 'STATUS', 'DATA MONT', 'OBS']
+    if disc == "ESTRUTURA":
+        cols_v = ['TAG', 'ÁREA', 'SEMANA OBRA', 'STATUS', 'DATA FABRICAÇÃO', 'DATA PINTURA', 'DATA MONT', 'DATA TARQUE']
+
+    df_vis = df_atual[[c for c in cols_v if c in df_atual.columns]].copy()
+    st.dataframe(df_vis, use_container_width=True, hide_index=True)
         
 
     elif aba == "📊 CURVA S":
